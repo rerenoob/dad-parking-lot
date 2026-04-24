@@ -93,3 +93,8 @@ CREATE POLICY "Users can update own settings"
 CREATE INDEX idx_customers_user_id ON customers(user_id);
 CREATE INDEX idx_customers_plate ON customers(plate);
 CREATE INDEX idx_payments_customer_id ON payments(customer_id);
+
+-- Grant permissions to authenticated users
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.customers TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.payments TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.settings TO authenticated;
