@@ -62,7 +62,6 @@ function showAuth() {
 function showApp() {
   document.getElementById('authScreen').classList.add('hide');
   document.getElementById('appScreen').classList.add('show');
-  document.getElementById('userEmail').textContent = state.user?.email || '';
 }
 
 function toggleLoading(btn, loading) {
@@ -96,22 +95,38 @@ function clearAuthMessages() {
 }
 
 async function handleLogin() {
-  const email = document.getElementById('loginEmail').value.trim();
+  const input = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
   const stayLoggedIn = document.getElementById('stayLoggedIn').checked;
-  if (!email || !password) { setAuthError('Vui lòng nhập email và mật khẩu'); return; }
+  if (!input || !password) { setAuthError('Vui lòng nhập tên đăng nhập và mật khẩu'); return; }
   clearAuthMessages();
   const btn = document.getElementById('loginBtn');
   toggleLoading(btn, true);
+
+  let email = input;
+  if (!input.includes('@')) {
+    // Username → email lookup (profiles table has public select policy)
+    const { data: profile, error: profileError } = await db
+      .from('profiles')
+      .select('email')
+      .eq('username', input.toLowerCase())
+      .maybeSingle();
+    if (profileError || !profile || !profile.email) {
+      toggleLoading(btn, false);
+      setAuthError('Không tìm thấy tên đăng nhập. Thử lại hoặc đăng ký tài khoản mới.');
+      return;
+    }
+    email = profile.email;
+  }
+
   const { error } = await db.auth.signInWithPassword({ email, password });
   toggleLoading(btn, false);
-  // Store preference — on next load, clear token if not staying logged in
   if (!error) {
     localStorage.setItem('stayLoggedIn', stayLoggedIn ? '1' : '0');
   }
   if (error) {
     if (error.message.includes('Invalid login credentials')) {
-      setAuthError('Sai email hoặc mật khẩu. Thử lại hoặc đăng ký tài khoản mới.');
+      setAuthError('Sai tên đăng nhập hoặc mật khẩu. Thử lại hoặc đăng ký tài khoản mới.');
     } else {
       setAuthError(error.message);
     }
@@ -119,21 +134,28 @@ async function handleLogin() {
 }
 
 async function handleSignUp() {
+  const username = document.getElementById('signupUsername').value.trim().toLowerCase();
   const email = document.getElementById('signupEmail').value.trim();
   const password = document.getElementById('signupPassword').value;
+  if (!username) { setAuthError('Vui lòng nhập tên đăng nhập'); return; }
   if (!email || !password) { setAuthError('Vui lòng nhập email và mật khẩu'); return; }
   if (password.length < 6) { setAuthError('Mật khẩu phải có ít nhất 6 ký tự'); return; }
   clearAuthMessages();
   const btn = document.getElementById('signupBtn');
   toggleLoading(btn, true);
-  const { error } = await db.auth.signUp({ email, password });
-  toggleLoading(btn, false);
+  const { data, error } = await db.auth.signUp({ email, password });
   if (error) {
+    toggleLoading(btn, false);
     setAuthError(error.message);
-  } else {
-    setAuthSuccess('Đăng ký thành công! Kiểm tra email để xác nhận tài khoản.');
-    setTimeout(() => showLogin(), 3000);
+    return;
   }
+  // Save username + email to profiles
+  if (data.user) {
+    await db.from('profiles').insert({ user_id: data.user.id, username, email });
+  }
+  toggleLoading(btn, false);
+  setAuthSuccess('Đăng ký thành công! Kiểm tra email để xác nhận tài khoản.');
+  setTimeout(() => showLogin(), 3000);
 }
 
 async function handleLogout() {
