@@ -1,12 +1,12 @@
-const CACHE_NAME = 'baixe-v2';
+const CACHE_NAME = 'baixe-v4';
 
 const ASSETS = [
-  '/dad-parking-app/',
-  '/dad-parking-app/index.html',
-  '/dad-parking-app/app.js',
-  '/dad-parking-app/manifest.json',
-  '/dad-parking-app/icon-192.png',
-  '/dad-parking-app/icon-512.png'
+  '/dad-parking-lot/',
+  '/dad-parking-lot/index.html',
+  '/dad-parking-lot/app.js',
+  '/dad-parking-lot/manifest.json',
+  '/dad-parking-lot/icon-192.png',
+  '/dad-parking-lot/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -29,10 +29,19 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Network-first: always try network, fall back to cache only if offline
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request).catch(() => cached);
-    })
+    fetch(event.request)
+      .then((response) => {
+        // Update cache with fresh response
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        return response;
+      })
+      .catch(() => {
+        // Offline fallback
+        return caches.match(event.request);
+      })
   );
 });
