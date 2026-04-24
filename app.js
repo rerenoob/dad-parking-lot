@@ -5,17 +5,6 @@
 const SUPABASE_URL = 'https://wgtkiapaxdrnhontmkux.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndndGtpYXBheGRybmhvbnRta3V4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMDU0NTIsImV4cCI6MjA5MjU4MTQ1Mn0._w6P1xYbPN27famcr-csw9okcAyByx48IHNyzX-3peY';
 
-if (!window.supabase || typeof window.supabase.createClient !== 'function') {
-  document.addEventListener('DOMContentLoaded', () => {
-    const errEl = document.getElementById('authError');
-    if (errEl) {
-      errEl.textContent = 'Không thể tải thư viện kết nối. Kiểm tra mạng và tải lại trang.';
-      errEl.classList.add('show');
-    }
-  });
-  throw new Error('Supabase CDN failed to load. window.supabase is not available.');
-}
-
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ===== State =====
