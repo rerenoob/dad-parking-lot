@@ -314,6 +314,10 @@
           <label>Mật khẩu</label>
           <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
         </div>
+        <div class="field" style="flex-direction:row;align-items:center;gap:8px;margin-bottom:4px">
+          <input type="checkbox" id="stayLoggedIn" checked style="width:18px;height:18px;cursor:pointer;accent-color:#1a73e8">
+          <label for="stayLoggedIn" style="font-size:14px;color:#555;cursor:pointer;margin:0">Ghi nhớ đăng nhập</label>
+        </div>
         <button class="btn-auth" id="loginBtn" onclick="handleLogin()">Đăng nhập</button>
         <div class="auth-toggle">
           Chưa có tài khoản? <a onclick="showSignUp()">Đăng ký</a>

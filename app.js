@@ -23,6 +23,11 @@ let state = {
 // ===== Auth =====
 async function initAuth() {
   try {
+    // If user didn't check "stay logged in", clear session on fresh page load
+    if (localStorage.getItem('stayLoggedIn') === '0') {
+      await db.auth.signOut();
+      localStorage.removeItem('stayLoggedIn');
+    }
     const { data: { session } } = await db.auth.getSession();
     if (session) {
       state.user = session.user;
@@ -94,12 +99,17 @@ function clearAuthMessages() {
 async function handleLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
+  const stayLoggedIn = document.getElementById('stayLoggedIn')?.checked !== false;
   if (!email || !password) { setAuthError('Vui lòng nhập email và mật khẩu'); return; }
   clearAuthMessages();
   const btn = document.getElementById('loginBtn');
   toggleLoading(btn, true);
   const { error } = await db.auth.signInWithPassword({ email, password });
   toggleLoading(btn, false);
+  // Store preference — on next load, clear token if not staying logged in
+  if (!error) {
+    localStorage.setItem('stayLoggedIn', stayLoggedIn ? '1' : '0');
+  }
   if (error) {
     if (error.message.includes('Invalid login credentials')) {
       setAuthError('Sai email hoặc mật khẩu. Thử lại hoặc đăng ký tài khoản mới.');
