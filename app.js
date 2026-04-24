@@ -3,6 +3,9 @@
 // Customer: { id, name, phone, plate, vehicle, spot, monthlyFee, notes, status, createdAt, payments: [{date, amount, method, note}] }
 // Settings: { monthlyRate, totalSpots, reminderDays }
 
+let _reminderPhone = '';
+let _reminderMsg = '';
+
 let state = {
   customers: [],
   settings: {
@@ -63,13 +66,18 @@ function saveData() {
 
 // --- Backup Reminder ---
 function checkBackupReminder() {
+  if (!state.lastBackupDate && state.customers.length > 0) {
+    // First launch with data — remind to back up
+    setTimeout(() => showToast('💾 Nhớ sao lưu dữ liệu trong Cài đặt để tránh mất'), 3000);
+    return;
+  }
   if (!state.lastBackupDate || state.customers.length === 0) return;
   const last = new Date(state.lastBackupDate);
   const now = new Date();
   const daysSinceBackup = Math.floor((now - last) / (1000 * 60 * 60 * 24));
   if (daysSinceBackup >= 7) {
     setTimeout(() => {
-      showToast('💾 Đã ${daysSinceBackup} ngày chưa sao lưu — vào Cài đặt để xuất dữ liệu');
+      showToast(`💾 Đã ${daysSinceBackup} ngày chưa sao lưu — vào Cài đặt để xuất dữ liệu`);
     }, 2000);
   }
 }
@@ -106,11 +114,9 @@ function updateCustomer(id, data) {
 }
 
 function deleteCustomer(id) {
-  if (!confirm('Xóa khách hàng này?')) return;
   state.customers = state.customers.filter(c => c.id !== id);
   saveData();
   renderAll();
-  closeModal2();
   showToast('🗑️ Đã xóa');
 }
 
@@ -138,8 +144,7 @@ function recordPayment(customerId, amount, method, note) {
 function getDueStatus(customer) {
   if (!customer.lastPaymentDate) return 'active';
   const last = new Date(customer.lastPaymentDate);
-  const next = new Date(last);
-  next.setMonth(next.getMonth() + 1);
+  const next = addOneMonth(last);
   const now = new Date();
   const daysUntilDue = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
   
@@ -159,6 +164,22 @@ function getStatusBadgeClass(status) {
   return map[status] || '';
 }
 
+function addOneMonth(date) {
+  const d = new Date(date);
+  const targetMonth = (d.getMonth() + 1) % 12;
+  d.setMonth(d.getMonth() + 1);
+  // Rolled over (e.g. Jan 31 → Mar 3): back up to last day of target month
+  if (d.getMonth() !== targetMonth) d.setDate(0);
+  return d;
+}
+
+// Parse YYYY-MM-DD date input as local noon to avoid UTC-midnight off-by-one in UTC+7
+function localDateToISO(dateStr) {
+  if (!dateStr) return new Date().toISOString();
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d, 12, 0, 0).toISOString();
+}
+
 function formatCurrency(amount) {
   if (!amount) return '0₫';
   return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '₫';
@@ -172,16 +193,13 @@ function formatDate(dateStr) {
 
 function getNextDueDate(customer) {
   if (!customer.lastPaymentDate) return 'Chưa xác định';
-  const d = new Date(customer.lastPaymentDate);
-  d.setMonth(d.getMonth() + 1);
-  return formatDate(d.toISOString());
+  return formatDate(addOneMonth(new Date(customer.lastPaymentDate)).toISOString());
 }
 
 function getDaysUntilDue(customer) {
   if (!customer.lastPaymentDate) return 0;
   const last = new Date(customer.lastPaymentDate);
-  const next = new Date(last);
-  next.setMonth(next.getMonth() + 1);
+  const next = addOneMonth(last);
   const now = new Date();
   return Math.ceil((next - now) / (1000 * 60 * 60 * 24));
 }
@@ -215,16 +233,16 @@ function renderCustomers() {
   list.innerHTML = customers.map(c => {
     const status = getDueStatus(c);
     const daysNum = getDaysUntilDue(c);
-    const dueLabel = daysNum > 0 ? `Còn ${daysNum} ngày` : `Quá hạn ${Math.abs(daysNum)} ngày`;
+    const dueLabel = daysNum > 0 ? `Còn ${daysNum} ngày` : daysNum === 0 ? 'Hết hạn hôm nay' : `Quá hạn ${Math.abs(daysNum)} ngày`;
     return `
       <div class="customer-card" onclick="openCustomerDetail('${c.id}')">
         <div class="name">${escapeHtml(c.name)}</div>
         <div class="plate">${escapeHtml(c.plate)}${c.vehicle ? ' · ' + escapeHtml(c.vehicle) : ''}</div>
         <div class="meta">
-          <span>📞 ${c.phone}</span>
+          <a href="tel:${escapeHtml(c.phone)}" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;">📞 ${escapeHtml(c.phone)}</a>
           <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span>
         </div>
-        <div class="meta" style="font-size:12px;">
+        <div class="meta">
           <span>📅 Hạn: ${getNextDueDate(c)} (${dueLabel})</span>
           <span>💰 ${formatCurrency(c.monthlyFee)}/th</span>
         </div>
@@ -285,7 +303,7 @@ function renderHistory() {
           </div>
           <div style="text-align:right;">
             <span class="amount">${formatCurrency(p.amount)}</span><br>
-            <span style="font-size:12px;color:#999;">${p.method}${p.note ? ' · ' + p.note : ''}</span>
+            <span style="font-size:12px;color:#999;">${escapeHtml(p.method)}${p.note ? ' · ' + escapeHtml(p.note) : ''}</span>
           </div>
         </div>
       `;
@@ -297,7 +315,7 @@ function renderHistory() {
 function updateSettingsPage() {
   document.getElementById('settingsCustomerCount').textContent = state.customers.length;
   document.getElementById('settingsTotalSpots').textContent = state.settings.totalSpots || 30;
-  document.getElementById('settingsAvailableSpots').textContent = (state.settings.totalSpots || 30) - state.customers.length;
+  document.getElementById('settingsAvailableSpots').textContent = Math.max(0, (state.settings.totalSpots || 30) - state.customers.length);
   
   let revenue = 0;
   const now = new Date();
@@ -379,7 +397,7 @@ function submitAddCustomer() {
     spot: document.getElementById('fSpot').value.trim(),
     monthlyFee: fee,
     notes: document.getElementById('fNotes').value.trim(),
-    lastPaymentDate: startDate ? new Date(startDate).toISOString() : new Date().toISOString()
+    lastPaymentDate: localDateToISO(startDate)
   });
   closeModal2();
 }
@@ -392,13 +410,13 @@ function openCustomerDetail(id) {
     <tr>
       <td>${formatDate(p.date)}</td>
       <td>${formatCurrency(p.amount)}</td>
-      <td>${p.method}</td>
-      <td style="font-size:12px;color:#999;">${p.note || ''}</td>
+      <td>${escapeHtml(p.method)}</td>
+      <td style="font-size:12px;color:#999;">${escapeHtml(p.note || '')}</td>
     </tr>
   `).join('') || '<tr><td colspan="4" style="text-align:center;color:#999;">Chưa có giao dịch</td></tr>';
 
   const daysNum = getDaysUntilDue(c);
-  const dueLabel = daysNum > 0 ? `còn ${daysNum} ngày` : `quá hạn ${Math.abs(daysNum)} ngày`;
+  const dueLabel = daysNum > 0 ? `còn ${daysNum} ngày` : daysNum === 0 ? 'hết hạn hôm nay' : `quá hạn ${Math.abs(daysNum)} ngày`;
 
   const content = `
     <h2>${escapeHtml(c.name)} <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span></h2>
@@ -406,7 +424,7 @@ function openCustomerDetail(id) {
     <div style="margin-bottom:12px;">
       <div class="field" style="display:flex;justify-content:space-between;margin-bottom:4px;">
         <span style="font-size:14px;"><strong>🪪 Biển số:</strong> ${escapeHtml(c.plate)}</span>
-        <span style="font-size:14px;"><strong>📞</strong> ${c.phone}</span>
+        <a href="tel:${escapeHtml(c.phone)}" style="font-size:14px;color:inherit;text-decoration:none;"><strong>📞</strong> ${escapeHtml(c.phone)}</a>
       </div>
       <div style="font-size:14px;margin-bottom:4px;">${c.vehicle ? '🚗 ' + escapeHtml(c.vehicle) : ''}${c.spot ? ' · 🅿️ ' + escapeHtml(c.spot) : ''}</div>
       <div style="font-size:14px;margin-bottom:4px;"><strong>💰 Giá tháng:</strong> ${formatCurrency(c.monthlyFee)}</div>
@@ -480,7 +498,7 @@ function editCustomer(id) {
   const content = `
     <h2>✏️ Sửa thông tin</h2>
     <div class="field"><label>Tên khách</label><input type="text" id="eName" value="${escapeHtml(c.name)}"></div>
-    <div class="field"><label>Số điện thoại</label><input type="tel" id="ePhone" value="${c.phone}"></div>
+    <div class="field"><label>Số điện thoại</label><input type="tel" id="ePhone" value="${escapeHtml(c.phone)}"></div>
     <div class="field"><label>Biển số xe</label><input type="text" id="ePlate" value="${escapeHtml(c.plate)}" style="text-transform:uppercase"></div>
     <div class="field"><label>Loại xe</label><input type="text" id="eVehicle" value="${escapeHtml(c.vehicle)}"></div>
     <div class="field"><label>Chỗ đỗ</label><input type="text" id="eSpot" value="${escapeHtml(c.spot)}"></div>
@@ -532,15 +550,16 @@ function sendReminder(customerId) {
     showToast('📋 ' + msg);
   }
   
-  // Offer Zalo deep link if phone is available
+  // Offer SMS option if phone is available
   if (c.phone) {
+    _reminderPhone = c.phone;
+    _reminderMsg = msg;
     setTimeout(() => {
-      // Async question: show option to open SMS or Zalo
       const content = `
         <h2>📨 Gửi nhắc nhở</h2>
         <p style="font-size:14px;margin-bottom:12px;padding:10px;background:#f5f5f5;border-radius:8px;">${escapeHtml(msg)}</p>
         <div class="btn-row">
-          <button class="btn-primary" onclick="window.open('sms:${c.phone}?body=${encodeURIComponent(msg)}','_blank');closeModal2();" style="flex:1;">💬 Gửi SMS</button>
+          <button class="btn-primary" onclick="sendSMSReminder()" style="flex:1;">💬 Gửi SMS</button>
           <button class="btn-success" onclick="showToast('📋 Đã copy, dán vào Zalo');closeModal2();" style="flex:1;">📱 Gửi Zalo</button>
         </div>
         <div class="btn-row">
@@ -550,6 +569,11 @@ function sendReminder(customerId) {
       showModal(content);
     }, 500);
   }
+}
+
+function sendSMSReminder() {
+  window.open('sms:' + _reminderPhone + '?body=' + encodeURIComponent(_reminderMsg), '_blank');
+  closeModal2();
 }
 
 function showDueSoon() {
@@ -572,7 +596,7 @@ function showDueSoon() {
         <div class="name">${escapeHtml(c.name)}</div>
         <div class="plate">${escapeHtml(c.plate)}</div>
         <div class="meta">
-          <span>📞 ${c.phone}</span>
+          <a href="tel:${escapeHtml(c.phone)}" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;">📞 ${escapeHtml(c.phone)}</a>
           <span class="status-badge ${getStatusBadgeClass(status)}">${daysText}</span>
         </div>
         <div class="meta">
@@ -593,12 +617,13 @@ function showDueSoon() {
     </div>
   `;
   showModal(content);
-  document.querySelector('.modal').style.maxHeight = '70vh';
 }
 
 // --- Utility ---
 function showModal(html) {
-  document.getElementById('modalContent').innerHTML = html;
+  const modal = document.getElementById('modalContent');
+  modal.innerHTML = html;
+  modal.style.maxHeight = '';
   document.getElementById('modalOverlay').classList.add('show');
 }
 
@@ -623,7 +648,7 @@ function escapeHtml(str) {
   if (!str) return '';
   const div = document.createElement('div');
   div.textContent = str;
-  return div.innerHTML;
+  return div.innerHTML.replace(/"/g, '&quot;');
 }
 
 function exportData() {
@@ -634,7 +659,7 @@ function exportData() {
   a.href = url;
   a.download = `baixe-backup-${new Date().toISOString().split('T')[0]}.json`;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
   state.lastBackupDate = new Date().toISOString();
   saveData();
   showToast('✅ Đã sao lưu dữ liệu');
@@ -660,7 +685,11 @@ function importData(event) {
         }
       }
       
-      state.customers = data.customers;
+      state.customers = data.customers.map(c => ({
+        ...c,
+        monthlyFee: Number(c.monthlyFee) || 0,
+        payments: (c.payments || []).map(p => ({ ...p, amount: Number(p.amount) || 0 }))
+      }));
       state.settings = { ...state.settings, ...(data.settings || {}) };
       saveData();
       renderAll();
