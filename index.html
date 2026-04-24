@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#1a73e8">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -13,17 +13,17 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #f0f2f5; color: #333;
+      background: #f0f2f5; color: #222;
       padding-bottom: 80px;
     }
     .header {
       background: linear-gradient(135deg, #1a73e8, #0d47a1);
-      color: white; padding: 16px 20px;
+      color: white; padding: 18px 20px;
       position: sticky; top: 0; z-index: 100;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
-    .header h1 { font-size: 20px; font-weight: 600; }
-    .header .sub { font-size: 13px; opacity: 0.85; margin-top: 2px; }
+    .header h1 { font-size: 22px; font-weight: 600; }
+    .header .sub { font-size: 14px; opacity: 0.85; margin-top: 2px; }
 
     .container { max-width: 480px; margin: 0 auto; padding: 12px; }
 
@@ -33,20 +33,21 @@
       margin-bottom: 12px;
     }
     .stat-card {
-      background: white; border-radius: 10px; padding: 12px 8px;
+      background: white; border-radius: 10px; padding: 14px 8px;
       text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
-    .stat-card .num { font-size: 22px; font-weight: 700; color: #1a73e8; }
-    .stat-card .label { font-size: 11px; color: #666; margin-top: 2px; }
+    .stat-card .num { font-size: 24px; font-weight: 700; color: #1a73e8; }
+    .stat-card .label { font-size: 13px; color: #666; margin-top: 2px; }
 
     /* Action buttons */
     .actions {
       display: flex; gap: 8px; margin-bottom: 12px;
     }
     .actions button {
-      flex: 1; padding: 14px; border: none; border-radius: 10px;
-      font-size: 15px; font-weight: 600; cursor: pointer;
+      flex: 1; padding: 16px; border: none; border-radius: 10px;
+      font-size: 16px; font-weight: 600; cursor: pointer;
       transition: transform 0.1s;
+      min-height: 52px;
     }
     .actions button:active { transform: scale(0.97); }
     .btn-add { background: #1a73e8; color: white; }
@@ -54,36 +55,37 @@
 
     /* Search */
     .search-bar {
-      background: white; border-radius: 10px; padding: 8px 14px;
+      background: white; border-radius: 10px; padding: 10px 14px;
       margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
       display: flex; align-items: center; gap: 8px;
     }
     .search-bar input {
-      flex: 1; border: none; outline: none; font-size: 15px;
+      flex: 1; border: none; outline: none; font-size: 16px;
       background: transparent;
     }
-    .search-bar span { color: #999; font-size: 16px; }
+    .search-bar span { color: #999; font-size: 18px; }
 
     /* Customer list */
     .customer-card {
-      background: white; border-radius: 10px; padding: 14px;
+      background: white; border-radius: 10px; padding: 16px;
       margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
       cursor: pointer; transition: all 0.15s;
+      min-height: 72px;
     }
     .customer-card:active { background: #f5f5f5; }
     .customer-card .name {
-      font-size: 16px; font-weight: 600; margin-bottom: 4px;
+      font-size: 17px; font-weight: 600; margin-bottom: 4px;
     }
     .customer-card .plate {
-      font-size: 14px; color: #1a73e8; font-weight: 500;
+      font-size: 15px; color: #1a73e8; font-weight: 500;
     }
     .customer-card .meta {
       display: flex; justify-content: space-between; align-items: center;
-      margin-top: 6px; font-size: 13px; color: #666;
+      margin-top: 6px; font-size: 14px; color: #555;
     }
     .status-badge {
-      display: inline-block; padding: 3px 10px; border-radius: 20px;
-      font-size: 11px; font-weight: 600;
+      display: inline-block; padding: 4px 12px; border-radius: 20px;
+      font-size: 12px; font-weight: 600;
     }
     .status-active { background: #e6f4ea; color: #1e7e34; }
     .status-due-soon { background: #fef7e0; color: #e37400; }
@@ -97,12 +99,13 @@
       border-top: 1px solid #e0e0e0; z-index: 100;
     }
     .bottom-nav button {
-      flex: 1; padding: 10px 0; border: none; background: transparent;
-      font-size: 12px; color: #666; cursor: pointer;
+      flex: 1; padding: 12px 0; border: none; background: transparent;
+      font-size: 13px; color: #555; cursor: pointer;
       display: flex; flex-direction: column; align-items: center; gap: 2px;
+      min-height: 56px;
     }
     .bottom-nav button.active { color: #1a73e8; font-weight: 600; }
-    .bottom-nav .nav-icon { font-size: 20px; }
+    .bottom-nav .nav-icon { font-size: 22px; }
 
     /* Modal */
     .modal-overlay {
@@ -113,50 +116,53 @@
     .modal-overlay.show { display: flex; }
     .modal {
       background: white; border-radius: 16px 16px 0 0;
-      width: 100%; max-width: 480px; max-height: 90vh;
-      overflow-y: auto; padding: 20px;
+      width: 100%; max-width: 480px; max-height: 85vh;
+      overflow-y: auto; padding: 24px 20px 28px;
       animation: slideUp 0.25s ease-out;
     }
     @keyframes slideUp {
       from { transform: translateY(100%); }
       to { transform: translateY(0); }
     }
-    .modal h2 { font-size: 18px; margin-bottom: 16px; }
-    .modal .field { margin-bottom: 12px; }
-    .modal label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+    .modal h2 { font-size: 20px; margin-bottom: 16px; }
+    .modal .field { margin-bottom: 14px; }
+    .modal label { display: block; font-size: 14px; color: #555; margin-bottom: 4px; }
     .modal input, .modal select, .modal textarea {
-      width: 100%; padding: 10px 12px; border: 1px solid #ddd;
-      border-radius: 8px; font-size: 15px; outline: none;
+      width: 100%; padding: 12px 14px; border: 1px solid #ddd;
+      border-radius: 8px; font-size: 16px; outline: none;
     }
     .modal input:focus, .modal select:focus { border-color: #1a73e8; }
     .modal textarea { resize: vertical; min-height: 60px; font-family: inherit; }
     .modal .btn-row {
-      display: flex; gap: 8px; margin-top: 16px;
+      display: flex; gap: 8px; margin-top: 14px;
     }
     .modal .btn-row button {
-      flex: 1; padding: 12px; border: none; border-radius: 10px;
-      font-size: 15px; font-weight: 600; cursor: pointer;
+      flex: 1; padding: 14px; border: none; border-radius: 10px;
+      font-size: 16px; font-weight: 600; cursor: pointer;
+      min-height: 48px;
     }
     .btn-primary { background: #1a73e8; color: white; }
-    .btn-secondary { background: #f1f3f4; color: #333; }
+    .btn-secondary { background: #f1f3f4; color: #222; }
     .btn-danger { background: #d93025; color: white; }
     .btn-success { background: #34a853; color: white; }
 
     /* Payment history table */
     .payment-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
     .payment-table th, .payment-table td {
-      padding: 8px 6px; text-align: left; font-size: 13px;
+      padding: 10px 8px; text-align: left; font-size: 14px;
       border-bottom: 1px solid #f0f0f0;
+      white-space: nowrap;
     }
-    .payment-table th { color: #666; font-weight: 500; font-size: 11px; text-transform: uppercase; }
+    .payment-table th { color: #555; font-weight: 500; font-size: 12px; text-transform: uppercase; }
 
     /* Toast */
     .toast {
       position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-      background: #323232; color: white; padding: 12px 24px;
-      border-radius: 8px; font-size: 14px; z-index: 300;
+      background: #323232; color: white; padding: 14px 28px;
+      border-radius: 10px; font-size: 15px; z-index: 300;
       opacity: 0; transition: opacity 0.3s;
-      pointer-events: none;
+      pointer-events: none; max-width: 90%;
+      text-align: center;
     }
     .toast.show { opacity: 1; }
 
@@ -165,46 +171,46 @@
     .page.active { display: block; }
 
     /* History page */
-    .history-date { font-size: 14px; font-weight: 600; margin: 12px 0 6px; color: #333; }
+    .history-date { font-size: 15px; font-weight: 600; margin: 14px 0 6px; color: #333; }
     .history-item {
-      background: white; border-radius: 8px; padding: 10px 14px;
+      background: white; border-radius: 8px; padding: 12px 14px;
       margin-bottom: 4px; display: flex; justify-content: space-between;
-      align-items: center; font-size: 13px;
+      align-items: center; font-size: 14px; cursor: pointer;
     }
     .history-item .amount { font-weight: 600; color: #1e7e34; }
-    .history-item .due { color: #c5221f; }
 
     .empty-state {
-      text-align: center; padding: 40px 20px; color: #999;
+      text-align: center; padding: 50px 20px; color: #999;
     }
-    .empty-state .icon { font-size: 48px; margin-bottom: 8px; }
-    .empty-state p { font-size: 14px; }
-
-    .badge-reminder { background: #d93025; color: white; }
-
-    /* Fix for iOS */
-    input, textarea, select { font-size: 16px !important; }
+    .empty-state .icon { font-size: 56px; margin-bottom: 8px; }
+    .empty-state p { font-size: 15px; }
 
     /* Settings page */
     .settings-group { background: white; border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
     .settings-item {
-      padding: 14px; border-bottom: 1px solid #f0f0f0;
+      padding: 16px; border-bottom: 1px solid #f0f0f0;
       display: flex; justify-content: space-between; align-items: center;
     }
     .settings-item:last-child { border-bottom: none; }
-    .settings-item .label { font-size: 14px; }
-    .settings-item .value { font-size: 14px; color: #666; }
-
-    /* Export/Import buttons */
-    .data-actions { display: flex; gap: 8px; margin-top: 12px; }
-    .data-actions button {
-      flex: 1; padding: 10px; border: 1px solid #ddd;
-      border-radius: 8px; background: white; cursor: pointer;
-      font-size: 13px;
+    .settings-item .label { font-size: 15px; }
+    .settings-item .value { font-size: 15px; color: #666; }
+    .settings-item input[type=number] {
+      width: 120px; text-align: right; padding: 8px 10px;
+      border: 1px solid #ddd; border-radius: 6px; font-size: 15px;
     }
 
-    .month-input-group { display: flex; align-items: center; gap: 8px; }
-    .month-input-group input { flex: 1; }
+    /* Export/Import buttons */
+    .data-actions { display: flex; gap: 8px; margin-top: 14px; }
+    .data-actions button {
+      flex: 1; padding: 12px; border: 1px solid #ddd;
+      border-radius: 8px; background: white; cursor: pointer;
+      font-size: 14px; min-height: 48px;
+    }
+
+    .stat-value { font-weight: 600; }
+
+    /* Fix for iOS zoom */
+    input, textarea, select { font-size: 16px !important; }
   </style>
 </head>
 <body>
@@ -254,15 +260,15 @@
       <div class="settings-group">
         <div class="settings-item">
           <span class="label">Giá tháng (VNĐ)</span>
-          <input type="number" id="monthlyRate" style="width:120px;text-align:right;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:14px;" onchange="saveSettings()">
+          <input type="number" id="monthlyRate" onchange="saveSettings()">
         </div>
         <div class="settings-item">
           <span class="label">Tổng số chỗ</span>
-          <input type="number" id="totalSpots" style="width:80px;text-align:right;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:14px;" onchange="saveSettings()">
+          <input type="number" id="totalSpots" onchange="saveSettings()">
         </div>
         <div class="settings-item">
           <span class="label">Nhắc nhở trước (ngày)</span>
-          <input type="number" id="reminderDays" style="width:60px;text-align:right;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:14px;" onchange="saveSettings()">
+          <input type="number" id="reminderDays" onchange="saveSettings()">
         </div>
       </div>
 
@@ -272,19 +278,28 @@
           <span class="value" id="settingsCustomerCount">0</span>
         </div>
         <div class="settings-item">
+          <span class="label">Tổng số chỗ</span>
+          <span class="value" id="settingsTotalSpots">30</span>
+        </div>
+        <div class="settings-item">
+          <span class="label">Chỗ trống</span>
+          <span class="value" id="settingsAvailableSpots">30</span>
+        </div>
+        <div class="settings-item">
           <span class="label">Doanh thu tháng này</span>
           <span class="value" id="settingsMonthlyRevenue">0₫</span>
         </div>
       </div>
 
       <div class="data-actions">
-        <button onclick="exportData()">📤 Xuất dữ liệu</button>
-        <button onclick="document.getElementById('importFile').click()">📥 Nhập dữ liệu</button>
+        <button onclick="exportData()">📤 Sao lưu dữ liệu</button>
+        <button onclick="document.getElementById('importFile').click()">📥 Phục hồi dữ liệu</button>
       </div>
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
 
-      <div style="text-align:center;margin-top:16px;font-size:12px;color:#999;">
-        Dữ liệu được lưu trên thiết bị này
+      <div style="text-align:center;margin-top:16px;font-size:13px;color:#999;">
+        Dữ liệu được lưu trên thiết bị này.<br>
+        Nhớ sao lưu thường xuyên để tránh mất dữ liệu.
       </div>
     </div>
   </div>
@@ -310,6 +325,16 @@
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
+  <script>
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        console.log('SW registered');
+      }).catch(err => {
+        console.log('SW registration failed:', err);
+      });
+    }
+  </script>
   <script src="app.js"></script>
 </body>
 </html>

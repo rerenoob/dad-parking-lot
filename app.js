@@ -10,7 +10,9 @@ let state = {
     totalSpots: 30,
     reminderDays: 3
   },
-  currentPage: 'customers'
+  currentPage: 'customers',
+  lastBackupDate: null,
+  initialized: false
 };
 
 // --- Initialization ---
@@ -20,6 +22,17 @@ function init() {
   renderStats();
   updateSettings();
   updateSettingsPage();
+  state.initialized = true;
+  
+  // Prompt to set monthly rate on first launch
+  if (state.customers.length === 0 && (!state.settings.monthlyRate || state.settings.monthlyRate === 0)) {
+    setTimeout(() => {
+      showToast('⚙️ Vào Cài đặt để nhập giá tháng trước khi thêm khách hàng');
+    }, 500);
+  }
+  
+  // Backup reminder
+  checkBackupReminder();
 }
 
 // --- Local Storage ---
@@ -30,17 +43,35 @@ function loadData() {
       const data = JSON.parse(saved);
       state.customers = data.customers || [];
       state.settings = { ...state.settings, ...(data.settings || {}) };
+      state.lastBackupDate = data.lastBackupDate || null;
     }
-  } catch(e) { console.error('Load error:', e); }
+  } catch(e) { console.error('Lỗi tải dữ liệu:', e); }
 }
 
 function saveData() {
   try {
     localStorage.setItem('parkingLotData', JSON.stringify({
       customers: state.customers,
-      settings: state.settings
+      settings: state.settings,
+      lastBackupDate: state.lastBackupDate
     }));
-  } catch(e) { console.error('Save error:', e); }
+  } catch(e) {
+    showToast('⚠️ Lỗi: không thể lưu dữ liệu. Dung lượng có thể đã đầy.');
+    console.error('Lỗi lưu dữ liệu:', e);
+  }
+}
+
+// --- Backup Reminder ---
+function checkBackupReminder() {
+  if (!state.lastBackupDate || state.customers.length === 0) return;
+  const last = new Date(state.lastBackupDate);
+  const now = new Date();
+  const daysSinceBackup = Math.floor((now - last) / (1000 * 60 * 60 * 24));
+  if (daysSinceBackup >= 7) {
+    setTimeout(() => {
+      showToast('💾 Đã ${daysSinceBackup} ngày chưa sao lưu — vào Cài đặt để xuất dữ liệu');
+    }, 2000);
+  }
 }
 
 // --- Customer CRUD ---
@@ -107,12 +138,14 @@ function recordPayment(customerId, amount, method, note) {
 function getDueStatus(customer) {
   if (!customer.lastPaymentDate) return 'active';
   const last = new Date(customer.lastPaymentDate);
+  const next = new Date(last);
+  next.setMonth(next.getMonth() + 1);
   const now = new Date();
-  const diffDays = Math.floor((now - last) / (1000 * 60 * 60 * 24));
+  const daysUntilDue = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
   
-  if (diffDays <= state.settings.reminderDays) return 'active';
-  if (diffDays <= state.settings.reminderDays + 7) return 'due-soon';
-  if (diffDays <= state.settings.reminderDays + 30) return 'overdue';
+  if (daysUntilDue > state.settings.reminderDays) return 'active';
+  if (daysUntilDue > 0) return 'due-soon';
+  if (daysUntilDue > -30) return 'overdue';
   return 'expired';
 }
 
@@ -181,6 +214,8 @@ function renderCustomers() {
 
   list.innerHTML = customers.map(c => {
     const status = getDueStatus(c);
+    const daysNum = getDaysUntilDue(c);
+    const dueLabel = daysNum > 0 ? `Còn ${daysNum} ngày` : `Quá hạn ${Math.abs(daysNum)} ngày`;
     return `
       <div class="customer-card" onclick="openCustomerDetail('${c.id}')">
         <div class="name">${escapeHtml(c.name)}</div>
@@ -189,8 +224,8 @@ function renderCustomers() {
           <span>📞 ${c.phone}</span>
           <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span>
         </div>
-        <div class="meta">
-          <span>📅 Hạn: ${getNextDueDate(c)}</span>
+        <div class="meta" style="font-size:12px;">
+          <span>📅 Hạn: ${getNextDueDate(c)} (${dueLabel})</span>
           <span>💰 ${formatCurrency(c.monthlyFee)}/th</span>
         </div>
       </div>
@@ -246,11 +281,11 @@ function renderHistory() {
         <div class="history-item" onclick="openCustomerDetail('${p.customerId}')">
           <div>
             <strong>${escapeHtml(p.customerName)}</strong><br>
-            <span style="font-size:12px;color:#666;">${escapeHtml(p.customerPlate)}</span>
+            <span style="font-size:13px;color:#666;">${escapeHtml(p.customerPlate)}</span>
           </div>
           <div style="text-align:right;">
             <span class="amount">${formatCurrency(p.amount)}</span><br>
-            <span style="font-size:11px;color:#999;">${p.method}${p.note ? ' · ' + p.note : ''}</span>
+            <span style="font-size:12px;color:#999;">${p.method}${p.note ? ' · ' + p.note : ''}</span>
           </div>
         </div>
       `;
@@ -261,6 +296,9 @@ function renderHistory() {
 
 function updateSettingsPage() {
   document.getElementById('settingsCustomerCount').textContent = state.customers.length;
+  document.getElementById('settingsTotalSpots').textContent = state.settings.totalSpots || 30;
+  document.getElementById('settingsAvailableSpots').textContent = (state.settings.totalSpots || 30) - state.customers.length;
+  
   let revenue = 0;
   const now = new Date();
   const thisMonth = now.getMonth();
@@ -290,6 +328,7 @@ function saveSettings() {
   state.settings.reminderDays = parseInt(document.getElementById('reminderDays').value) || 3;
   saveData();
   renderAll();
+  showToast('✅ Đã lưu cài đặt');
 }
 
 function switchPage(page) {
@@ -354,8 +393,12 @@ function openCustomerDetail(id) {
       <td>${formatDate(p.date)}</td>
       <td>${formatCurrency(p.amount)}</td>
       <td>${p.method}</td>
+      <td style="font-size:12px;color:#999;">${p.note || ''}</td>
     </tr>
-  `).join('') || '<tr><td colspan="3" style="text-align:center;color:#999;">Chưa có giao dịch</td></tr>';
+  `).join('') || '<tr><td colspan="4" style="text-align:center;color:#999;">Chưa có giao dịch</td></tr>';
+
+  const daysNum = getDaysUntilDue(c);
+  const dueLabel = daysNum > 0 ? `còn ${daysNum} ngày` : `quá hạn ${Math.abs(daysNum)} ngày`;
 
   const content = `
     <h2>${escapeHtml(c.name)} <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span></h2>
@@ -368,50 +411,66 @@ function openCustomerDetail(id) {
       <div style="font-size:14px;margin-bottom:4px;">${c.vehicle ? '🚗 ' + escapeHtml(c.vehicle) : ''}${c.spot ? ' · 🅿️ ' + escapeHtml(c.spot) : ''}</div>
       <div style="font-size:14px;margin-bottom:4px;"><strong>💰 Giá tháng:</strong> ${formatCurrency(c.monthlyFee)}</div>
       <div style="font-size:14px;margin-bottom:4px;"><strong>📅 Đóng gần nhất:</strong> ${formatDate(c.lastPaymentDate)}</div>
-      <div style="font-size:14px;margin-bottom:4px;"><strong>⏰ Hạn tới:</strong> ${getNextDueDate(c)} (còn ${getDaysUntilDue(c)} ngày)</div>
+      <div style="font-size:14px;margin-bottom:4px;"><strong>⏰ Hạn tới:</strong> ${getNextDueDate(c)} (${dueLabel})</div>
       ${c.notes ? '<div style="font-size:13px;color:#666;margin-top:4px;padding:8px;background:#f9f9f9;border-radius:6px;">📝 ' + escapeHtml(c.notes) + '</div>' : ''}
     </div>
 
     <div style="margin:12px 0;">
       <div style="font-size:14px;font-weight:600;margin-bottom:6px;">💰 Ghi nhận thanh toán</div>
-      <div style="display:flex;gap:8px;">
-        <input type="number" id="payAmount" placeholder="Số tiền" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:14px;" value="${c.monthlyFee}">
-        <select id="payMethod" style="padding:8px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input type="number" id="payAmount" placeholder="Số tiền" style="flex:1;min-width:100px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;" value="${c.monthlyFee}">
+        <select id="payMethod" style="padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
           <option value="Tiền mặt">Tiền mặt</option>
           <option value="Chuyển khoản">Chuyển khoản</option>
         </select>
       </div>
-      <button class="btn-success" style="width:100%;margin-top:6px;padding:10px;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;" onclick="submitPayment('${c.id}')">✅ Ghi nhận thanh toán</button>
+      <input type="text" id="payNote" placeholder="Ghi chú (VD: đóng tháng 4)" style="width:100%;margin-top:6px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;">
+      <button class="btn-success" style="width:100%;margin-top:6px;padding:12px;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;" onclick="submitPayment('${c.id}')">✅ Ghi nhận thanh toán</button>
     </div>
 
     <div style="margin:12px 0;">
       <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Lịch sử thanh toán</div>
-      <table class="payment-table">
-        <thead><tr><th>Ngày</th><th>Số tiền</th><th>Phương thức</th></tr></thead>
-        <tbody>${payments}</tbody>
-      </table>
+      <div style="overflow-x:auto;">
+        <table class="payment-table">
+          <thead><tr><th>Ngày</th><th>Tiền</th><th>Hình thức</th><th>Ghi chú</th></tr></thead>
+          <tbody>${payments}</tbody>
+        </table>
+      </div>
     </div>
 
     <div class="btn-row">
-      <button class="btn-secondary" onclick="editCustomer('${c.id}')">✏️ Sửa</button>
-      <button class="btn-secondary" onclick="sendReminder('${c.id}')">📨 Nhắc nhở</button>
-      <button class="btn-danger" onclick="deleteCustomer('${c.id}')">🗑️ Xóa</button>
+      <button class="btn-secondary" onclick="editCustomer('${c.id}')" style="flex:1;">✏️ Sửa</button>
+      <button class="btn-secondary" onclick="sendReminder('${c.id}')" style="flex:1;">📨 Nhắc nhở</button>
     </div>
-    <div class="btn-row">
-      <button class="btn-secondary" onclick="closeModal2()" style="flex:1;">Đóng</button>
+    <div class="btn-row" style="margin-top:4px;">
+      <button class="btn-secondary" onclick="closeModal2()" style="flex:2;">Đóng</button>
+      <button class="btn-danger" onclick="confirmDelete('${c.id}')" style="flex:1;">🗑️ Xóa</button>
     </div>
   `;
   showModal(content);
 }
 
+function confirmDelete(id) {
+  closeModal2();
+  setTimeout(() => {
+    if (confirm('Xóa khách hàng này?')) {
+      state.customers = state.customers.filter(c => c.id !== id);
+      saveData();
+      renderAll();
+      showToast('🗑️ Đã xóa');
+    }
+  }, 200);
+}
+
 function submitPayment(customerId) {
   const amount = parseInt(document.getElementById('payAmount').value);
   const method = document.getElementById('payMethod').value;
+  const note = document.getElementById('payNote').value.trim();
   if (!amount || amount <= 0) {
     showToast('⚠️ Nhập số tiền hợp lệ');
     return;
   }
-  recordPayment(customerId, amount, method, '');
+  recordPayment(customerId, amount, method, note);
   openCustomerDetail(customerId);
 }
 
@@ -457,22 +516,40 @@ function sendReminder(customerId) {
   const days = getDaysUntilDue(c);
   let msg;
   if (days <= 0) {
-    msg = `Khách ${c.name} (${c.plate}) đã quá hạn ${Math.abs(days)} ngày. Số tiền: ${formatCurrency(c.monthlyFee)}`;
+    msg = `Chào anh/chị ${c.name}, kỳ hạn gửi xe tháng này (biển số ${c.plate}) đã quá hạn ${Math.abs(days)} ngày. Anh/chị vui lòng đóng ${formatCurrency(c.monthlyFee)} để tiếp tục gửi xe. Cảm ơn!`;
   } else {
-    msg = `Khách ${c.name} (${c.plate}) còn ${days} ngày đến hạn. Số tiền: ${formatCurrency(c.monthlyFee)}`;
+    msg = `Chào anh/chị ${c.name}, kỳ hạn gửi xe tháng này (biển số ${c.plate}) còn ${days} ngày nữa. Anh/chị vui lòng đóng ${formatCurrency(c.monthlyFee)} trước ngày ${getNextDueDate(c)}. Cảm ơn!`;
   }
   
   // Copy to clipboard
   if (navigator.clipboard) {
     navigator.clipboard.writeText(msg).then(() => {
-      showToast('📋 Đã copy nội dung nhắc nhở, hãy dán vào tin nhắn SMS/Zalo');
+      showToast('📋 Đã copy — hãy dán vào tin nhắn SMS/Zalo cho khách');
     }).catch(() => {
       showToast('📋 ' + msg);
     });
   } else {
     showToast('📋 ' + msg);
   }
-  closeModal2();
+  
+  // Offer Zalo deep link if phone is available
+  if (c.phone) {
+    setTimeout(() => {
+      // Async question: show option to open SMS or Zalo
+      const content = `
+        <h2>📨 Gửi nhắc nhở</h2>
+        <p style="font-size:14px;margin-bottom:12px;padding:10px;background:#f5f5f5;border-radius:8px;">${escapeHtml(msg)}</p>
+        <div class="btn-row">
+          <button class="btn-primary" onclick="window.open('sms:${c.phone}?body=${encodeURIComponent(msg)}','_blank');closeModal2();" style="flex:1;">💬 Gửi SMS</button>
+          <button class="btn-success" onclick="showToast('📋 Đã copy, dán vào Zalo');closeModal2();" style="flex:1;">📱 Gửi Zalo</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn-secondary" onclick="closeModal2()" style="flex:1;">Đóng</button>
+        </div>
+      `;
+      showModal(content);
+    }, 500);
+  }
 }
 
 function showDueSoon() {
@@ -507,8 +584,8 @@ function showDueSoon() {
 
   const content = `
     <h2>🔔 Khách cần nhắc</h2>
-    <div style="font-size:13px;color:#666;margin-bottom:8px;">
-      ${dueSoon.length} khách hàng ${dueSoon.length > 1 ? 'cần' : 'cần'} được nhắc
+    <div style="font-size:14px;color:#666;margin-bottom:8px;">
+      Có ${dueSoon.length} khách hàng cần được nhắc
     </div>
     ${list}
     <div class="btn-row">
@@ -539,7 +616,7 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(t._timeout);
-  t._timeout = setTimeout(() => t.classList.remove('show'), 2500);
+  t._timeout = setTimeout(() => t.classList.remove('show'), 3500);
 }
 
 function escapeHtml(str) {
@@ -558,28 +635,39 @@ function exportData() {
   a.download = `baixe-backup-${new Date().toISOString().split('T')[0]}.json`;
   a.click();
   URL.revokeObjectURL(url);
-  showToast('✅ Đã xuất dữ liệu');
+  state.lastBackupDate = new Date().toISOString();
+  saveData();
+  showToast('✅ Đã sao lưu dữ liệu');
 }
 
 function importData(event) {
   const file = event.target.files[0];
   if (!file) return;
+  
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
-      if (data.customers) {
-        state.customers = data.customers;
-        state.settings = { ...state.settings, ...(data.settings || {}) };
-        saveData();
-        renderAll();
-        updateSettings();
-        showToast('✅ Đã nhập dữ liệu');
-      } else {
-        showToast('⚠️ File không hợp lệ');
+      if (!data.customers || !Array.isArray(data.customers)) {
+        showToast('⚠️ File không hợp lệ — thiếu danh sách khách hàng');
+        return;
       }
+      
+      // Confirm before overwriting
+      if (state.customers.length > 0) {
+        if (!confirm(`Nhập dữ liệu sẽ THAY THẾ toàn bộ ${state.customers.length} khách hàng hiện tại. Tiếp tục?`)) {
+          return;
+        }
+      }
+      
+      state.customers = data.customers;
+      state.settings = { ...state.settings, ...(data.settings || {}) };
+      saveData();
+      renderAll();
+      updateSettings();
+      showToast(`✅ Đã nhập ${data.customers.length} khách hàng`);
     } catch(err) {
-      showToast('⚠️ Lỗi đọc file');
+      showToast('⚠️ Lỗi đọc file — file không đúng định dạng');
     }
   };
   reader.readAsText(file);
