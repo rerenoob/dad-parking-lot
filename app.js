@@ -22,12 +22,12 @@ let state = {
 
 // ===== Auth =====
 async function initAuth() {
+  // If user didn't check "stay logged in", clear session on fresh page load
+  if (localStorage.getItem('stayLoggedIn') === '0') {
+    localStorage.removeItem('stayLoggedIn');
+    try { await db.auth.signOut(); } catch (_) {}
+  }
   try {
-    // If user didn't check "stay logged in", clear session on fresh page load
-    if (localStorage.getItem('stayLoggedIn') === '0') {
-      await db.auth.signOut();
-      localStorage.removeItem('stayLoggedIn');
-    }
     const { data: { session } } = await db.auth.getSession();
     if (session) {
       state.user = session.user;
@@ -39,7 +39,6 @@ async function initAuth() {
   } catch (e) {
     console.error('initAuth error:', e);
     showAuth();
-    setAuthError('Lỗi kết nối máy chủ. Kiểm tra mạng và tải lại trang.');
   }
 
   db.auth.onAuthStateChange((event, session) => {
