@@ -1,12 +1,12 @@
-const CACHE_NAME = 'baixe-v4';
+const CACHE_NAME = 'baixe-v5';
 
 const ASSETS = [
-  '/dad-parking-lot/',
-  '/dad-parking-lot/index.html',
-  '/dad-parking-lot/app.js',
-  '/dad-parking-lot/manifest.json',
-  '/dad-parking-lot/icon-192.png',
-  '/dad-parking-lot/icon-512.png'
+  '/dad-parking-app/',
+  '/dad-parking-app/index.html',
+  '/dad-parking-app/app.js',
+  '/dad-parking-app/manifest.json',
+  '/dad-parking-app/icon-192.png',
+  '/dad-parking-app/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -30,7 +30,12 @@ self.addEventListener('activate', (event) => {
 });
 
 // Network-first: always try network, fall back to cache only if offline
+// Only cache same-origin GET requests (skip Supabase API calls and POST requests)
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  if (url.hostname !== self.location.hostname) return;
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {

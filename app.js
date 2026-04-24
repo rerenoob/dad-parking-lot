@@ -99,7 +99,7 @@ function clearAuthMessages() {
 async function handleLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
-  const stayLoggedIn = document.getElementById('stayLoggedIn')?.checked !== false;
+  const stayLoggedIn = document.getElementById('stayLoggedIn').checked;
   if (!email || !password) { setAuthError('Vui lòng nhập email và mật khẩu'); return; }
   clearAuthMessages();
   const btn = document.getElementById('loginBtn');
@@ -138,6 +138,7 @@ async function handleSignUp() {
 }
 
 async function handleLogout() {
+  localStorage.removeItem('stayLoggedIn');
   await db.auth.signOut();
 }
 
@@ -155,6 +156,7 @@ function showSignUp() {
 
 // ===== Data Loading =====
 async function initApp() {
+  switchPage('customers');
   state.loading = true;
   document.getElementById('customerList').innerHTML = '<div class="loading-text"><span class="spinner"></span> Đang tải dữ liệu...</div>';
   try {
@@ -251,7 +253,7 @@ async function addCustomer(data) {
     })
     .select()
     .single();
-  if (error) { showToast('⚠️ Lỗi: ' + error.message); return; }
+  if (error) { showToast('⚠️ Lỗi: ' + error.message); return false; }
 
   state.customers.unshift({
     id: result.id,
@@ -268,6 +270,7 @@ async function addCustomer(data) {
   });
   renderAll();
   showToast('✅ Đã thêm khách hàng');
+  return true;
 }
 
 async function updateCustomer(id, data) {
@@ -318,7 +321,7 @@ async function recordPayment(customerId, amount, method, note) {
     })
     .select()
     .single();
-  if (payError) { showToast('⚠️ Lỗi: ' + payError.message); return; }
+  if (payError) { showToast('⚠️ Lỗi: ' + payError.message); return false; }
 
   const now = new Date().toISOString();
   const { error: updError } = await db
@@ -326,7 +329,7 @@ async function recordPayment(customerId, amount, method, note) {
     .update({ last_payment_date: now })
     .eq('id', customerId)
     .eq('user_id', state.user.id);
-  if (updError) { showToast('⚠️ Lỗi: ' + updError.message); return; }
+  if (updError) { showToast('⚠️ Lỗi: ' + updError.message); return false; }
 
   const c = state.customers.find(c => c.id === customerId);
   if (c) {
@@ -343,6 +346,7 @@ async function recordPayment(customerId, amount, method, note) {
   }
   renderAll();
   showToast('💰 Đã ghi nhận thanh toán');
+  return true;
 }
 
 // ===== Computed =====
@@ -583,7 +587,7 @@ async function submitAddCustomer() {
   }
   const fee = parseInt(document.getElementById('fFee').value) || state.settings.monthly_rate;
   const startDate = document.getElementById('fStart').value;
-  await addCustomer({
+  const ok = await addCustomer({
     name, phone, plate,
     vehicle: document.getElementById('fVehicle').value.trim(),
     spot: document.getElementById('fSpot').value.trim(),
@@ -591,7 +595,7 @@ async function submitAddCustomer() {
     notes: document.getElementById('fNotes').value.trim(),
     lastPaymentDate: localDateToISO(startDate)
   });
-  closeModal2();
+  if (ok) closeModal2();
 }
 
 async function openCustomerDetail(id) {
@@ -670,8 +674,8 @@ async function submitPayment(customerId) {
   const method = document.getElementById('payMethod').value;
   const note = document.getElementById('payNote').value.trim();
   if (!amount || amount <= 0) { showToast('⚠️ Nhập số tiền hợp lệ'); return; }
-  await recordPayment(customerId, amount, method, note);
-  openCustomerDetail(customerId);
+  const ok = await recordPayment(customerId, amount, method, note);
+  if (ok) openCustomerDetail(customerId);
 }
 
 function editCustomer(id) {
@@ -841,10 +845,8 @@ function importData(event) {
         showToast('⚠️ File không hợp lệ — thiếu danh sách khách hàng');
         return;
       }
-      if (state.customers.length > 0) {
-        if (!confirm(`Nhập dữ liệu sẽ THAY THẾ toàn bộ ${state.customers.length} khách hàng hiện tại. Tiếp tục?`)) {
-          return;
-        }
+      if (!confirm(`Nhập dữ liệu JSON sẽ hiển thị tạm thời trên màn hình.\n\n⚠️ Lưu ý: dữ liệu này KHÔNG được lưu vào máy chủ — tải lại trang sẽ mất.\n\nĐể thêm khách hàng lâu dài, hãy dùng nút "Thêm khách" sau khi nhập.\n\nTiếp tục?`)) {
+        return;
       }
       state.customers = data.customers.map(c => ({
         ...c,
@@ -854,7 +856,7 @@ function importData(event) {
       state.settings = { ...state.settings, ...(data.settings || {}) };
       renderAll();
       updateSettings();
-      showToast(`✅ Đã nhập ${data.customers.length} khách hàng`);
+      showToast(`✅ Đã nhập ${data.customers.length} khách hàng (tạm thời — tải lại trang sẽ mất)`);
     } catch(err) {
       showToast('⚠️ Lỗi đọc file — file không đúng định dạng');
     }
