@@ -567,7 +567,27 @@ function openAddCustomer() {
     <div class="field"><label>Loại xe</label><input type="text" id="fVehicle" placeholder="VD: Toyota Vios"></div>
     <div class="field"><label>Chỗ đỗ</label><input type="text" id="fSpot" placeholder="VD: A12"></div>
     <div class="field"><label>Giá tháng (VNĐ)</label><input type="number" id="fFee" value="${rate}" placeholder="VD: 1000000"></div>
-    <div class="field"><label>Ngày bắt đầu</label><input type="date" id="fStart" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="field"><label>Ngày bắt đầu</label>
+      <div style="display:flex;gap:8px">
+        ${(()=>{
+          const now = new Date();
+          const d = now.getDate(), m = now.getMonth()+1, y = now.getFullYear();
+          const days = Array.from({length:31},(_,i)=>`<option value="${i+1}" ${i+1===d?'selected':''}>${i+1}</option>`).join('');
+          const months = Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===m?'selected':''}>${i+1}</option>`).join('');
+          const years = Array.from({length:5},(_,i)=>{ const yr=y-2+i; return `<option value="${yr}" ${yr===y?'selected':''}>${yr}</option>`; }).join('');
+          return `<select id="fStartD" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:15px">
+            ${days}
+          </select>
+          <select id="fStartM" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:15px">
+            ${months}
+          </select>
+          <select id="fStartY" style="flex:1.3;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:15px">
+            ${years}
+          </select>`;
+        })()}
+      </div>
+      <div style="font-size:12px;color:#999;margin-top:4px">Ngày — Tháng — Năm</div>
+    </div>
     <div class="field"><label>Ghi chú</label><textarea id="fNotes" placeholder="VD: Tình trạng xe, thỏa thuận đặc biệt..."></textarea></div>
     <div class="btn-row">
       <button class="btn-secondary" onclick="closeModal2()">Hủy</button>
@@ -586,7 +606,10 @@ async function submitAddCustomer() {
     return;
   }
   const fee = parseInt(document.getElementById('fFee').value) || state.settings.monthly_rate;
-  const startDate = document.getElementById('fStart').value;
+  const sd = parseInt(document.getElementById('fStartD').value);
+  const sm = parseInt(document.getElementById('fStartM').value);
+  const sy = parseInt(document.getElementById('fStartY').value);
+  const startDate = `${sy}-${String(sm).padStart(2,'0')}-${String(sd).padStart(2,'0')}`;
   const ok = await addCustomer({
     name, phone, plate,
     vehicle: document.getElementById('fVehicle').value.trim(),
