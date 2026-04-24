@@ -1,7 +1,7 @@
 {
   "name": "Quản Lý Bãi Xe - Thành Dương",
   "short_name": "Bãi Xe",
-  "start_url": "/dad-parking-app/",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#f0f2f5",
   "theme_color": "#1a73e8",

@@ -8,15 +8,20 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ===== Currency Input Helpers =====
+function formatComma(num) {
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
 function initCurrencyInput(id) {
   const el = document.getElementById(id);
-  if (!el) return;
+  if (!el || el._currencyInit) return;
+  el._currencyInit = true;
   // Format on input
   el.addEventListener('input', () => {
     const raw = el.value.replace(/[^0-9]/g, '');
     const pos = el.selectionStart;
     const oldLen = el.value.length;
-    el.value = raw ? parseInt(raw).toLocaleString('vi-VN') : '';
+    el.value = raw ? formatComma(parseInt(raw)) : '';
     // Restore cursor roughly
     const newLen = el.value.length;
     el.selectionStart = el.selectionEnd = pos + (newLen - oldLen);
@@ -24,14 +29,14 @@ function initCurrencyInput(id) {
   // Format on blur
   el.addEventListener('blur', () => {
     const raw = el.value.replace(/[^0-9]/g, '');
-    el.value = raw ? parseInt(raw).toLocaleString('vi-VN') : '';
+    el.value = raw ? formatComma(parseInt(raw)) : '';
   });
 }
 
 function setCurrencyValue(id, num) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.value = num ? parseInt(num).toLocaleString('vi-VN') : '';
+  el.value = num ? formatComma(parseInt(num)) : '';
 }
 
 function getCurrencyValue(id) {
@@ -184,7 +189,12 @@ async function handleSignUp() {
   }
   // Save username + email to profiles
   if (data.user) {
-    await db.from('profiles').insert({ user_id: data.user.id, username, email });
+    const { error: profileError } = await db.from('profiles').insert({ user_id: data.user.id, username, email });
+    if (profileError) {
+      toggleLoading(btn, false);
+      setAuthError('Tên đăng nhập đã tồn tại hoặc có lỗi khi tạo tài khoản. Vui lòng chọn tên khác.');
+      return;
+    }
   }
   toggleLoading(btn, false);
   setAuthSuccess('Đăng ký thành công! Kiểm tra email để xác nhận tài khoản.');
@@ -215,6 +225,7 @@ async function initApp() {
   document.getElementById('customerList').innerHTML = '<div class="loading-text"><span class="spinner"></span> Đang tải dữ liệu...</div>';
   try {
     await Promise.all([loadCustomers(), loadSettings()]);
+    initCurrencyInput('monthlyRate');
     renderAll();
   } catch (e) {
     console.error('Error loading data:', e);
@@ -490,7 +501,7 @@ function renderCustomers() {
   list.innerHTML = customers.map(c => {
     const status = getDueStatus(c);
     const daysNum = getDaysUntilDue(c);
-    const dueLabel = daysNum > 0 ? `Còn ${daysNum} ngày` : daysNum === 0 ? 'Hết hạn hôm nay' : `Quá hạn ${Math.abs(daysNum)} ngày`;
+    const dueLabel = !c.lastPaymentDate ? 'Chưa xác định' : daysNum > 0 ? `Còn ${daysNum} ngày` : daysNum === 0 ? 'Hết hạn hôm nay' : `Quá hạn ${Math.abs(daysNum)} ngày`;
     return `
       <div class="customer-card" onclick="openCustomerDetail('${c.id}')">
         <div class="name">${escapeHtml(c.name)}</div>
@@ -586,7 +597,6 @@ function updateSettingsPage() {
 
 function updateSettings() {
   setCurrencyValue('monthlyRate', state.settings.monthly_rate);
-  initCurrencyInput('monthlyRate');
   document.getElementById('totalSpots').value = state.settings.total_spots || 30;
   document.getElementById('reminderDays').value = state.settings.reminder_days || 3;
 }
@@ -621,7 +631,7 @@ function openAddCustomer() {
     <div class="field"><label>Biển số xe *</label><input type="text" id="fPlate" placeholder="VD: 51A-12345" style="text-transform:uppercase"></div>
     <div class="field"><label>Loại xe</label><input type="text" id="fVehicle" placeholder="VD: Toyota Vios"></div>
     <div class="field"><label>Chỗ đỗ</label><input type="text" id="fSpot" placeholder="VD: A12"></div>
-    <div class="field"><label>Giá tháng (VNĐ)</label><input type="text" inputmode="numeric" id="fFee" placeholder="VD: 1.000.000"></div>
+    <div class="field"><label>Giá tháng (VNĐ)</label><input type="text" inputmode="numeric" id="fFee" placeholder="VD: 1,000,000"></div>
     <div class="field"><label>Ngày bắt đầu</label>
       <div style="display:flex;gap:8px">
         ${(()=>{
@@ -692,7 +702,7 @@ async function openCustomerDetail(id) {
   `).join('') || '<tr><td colspan="4" style="text-align:center;color:#999;">Chưa có giao dịch</td></tr>';
 
   const daysNum = getDaysUntilDue(c);
-  const dueLabel = daysNum > 0 ? `còn ${daysNum} ngày` : daysNum === 0 ? 'hết hạn hôm nay' : `quá hạn ${Math.abs(daysNum)} ngày`;
+  const dueLabel = !c.lastPaymentDate ? 'chưa xác định' : daysNum > 0 ? `còn ${daysNum} ngày` : daysNum === 0 ? 'hết hạn hôm nay' : `quá hạn ${Math.abs(daysNum)} ngày`;
 
   const content = `
     <h2>${escapeHtml(c.name)} <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span></h2>
@@ -845,7 +855,7 @@ function showDueSoon() {
   const list = dueSoon.map(c => {
     const status = getDueStatus(c);
     const days = getDaysUntilDue(c);
-    const daysText = days <= 0 ? `Quá hạn ${Math.abs(days)} ngày` : `Còn ${days} ngày`;
+    const daysText = !c.lastPaymentDate ? 'Chưa xác định' : days <= 0 ? `Quá hạn ${Math.abs(days)} ngày` : `Còn ${days} ngày`;
     return `
       <div class="customer-card" onclick="openCustomerDetail('${c.id}')">
         <div class="name">${escapeHtml(c.name)}</div>
