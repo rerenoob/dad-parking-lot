@@ -7,6 +7,39 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// ===== Currency Input Helpers =====
+function initCurrencyInput(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  // Format on input
+  el.addEventListener('input', () => {
+    const raw = el.value.replace(/[^0-9]/g, '');
+    const pos = el.selectionStart;
+    const oldLen = el.value.length;
+    el.value = raw ? parseInt(raw).toLocaleString('vi-VN') : '';
+    // Restore cursor roughly
+    const newLen = el.value.length;
+    el.selectionStart = el.selectionEnd = pos + (newLen - oldLen);
+  });
+  // Format on blur
+  el.addEventListener('blur', () => {
+    const raw = el.value.replace(/[^0-9]/g, '');
+    el.value = raw ? parseInt(raw).toLocaleString('vi-VN') : '';
+  });
+}
+
+function setCurrencyValue(id, num) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = num ? parseInt(num).toLocaleString('vi-VN') : '';
+}
+
+function getCurrencyValue(id) {
+  const el = document.getElementById(id);
+  if (!el) return 0;
+  return parseInt(el.value.replace(/[^0-9]/g, '')) || 0;
+}
+
 // ===== State =====
 let state = {
   customers: [],
@@ -552,13 +585,14 @@ function updateSettingsPage() {
 }
 
 function updateSettings() {
-  document.getElementById('monthlyRate').value = state.settings.monthly_rate || '';
+  setCurrencyValue('monthlyRate', state.settings.monthly_rate);
+  initCurrencyInput('monthlyRate');
   document.getElementById('totalSpots').value = state.settings.total_spots || 30;
   document.getElementById('reminderDays').value = state.settings.reminder_days || 3;
 }
 
 async function saveSettings() {
-  state.settings.monthly_rate = parseInt(document.getElementById('monthlyRate').value) || 0;
+  state.settings.monthly_rate = getCurrencyValue('monthlyRate');
   state.settings.total_spots = parseInt(document.getElementById('totalSpots').value) || 30;
   state.settings.reminder_days = parseInt(document.getElementById('reminderDays').value) || 3;
   await saveSettingsToDB();
@@ -587,7 +621,7 @@ function openAddCustomer() {
     <div class="field"><label>Biển số xe *</label><input type="text" id="fPlate" placeholder="VD: 51A-12345" style="text-transform:uppercase"></div>
     <div class="field"><label>Loại xe</label><input type="text" id="fVehicle" placeholder="VD: Toyota Vios"></div>
     <div class="field"><label>Chỗ đỗ</label><input type="text" id="fSpot" placeholder="VD: A12"></div>
-    <div class="field"><label>Giá tháng (VNĐ)</label><input type="number" id="fFee" value="${rate}" placeholder="VD: 1000000"></div>
+    <div class="field"><label>Giá tháng (VNĐ)</label><input type="text" inputmode="numeric" id="fFee" placeholder="VD: 1.000.000"></div>
     <div class="field"><label>Ngày bắt đầu</label>
       <div style="display:flex;gap:8px">
         ${(()=>{
@@ -616,6 +650,8 @@ function openAddCustomer() {
     </div>
   `;
   showModal(content);
+  setCurrencyValue('fFee', rate);
+  initCurrencyInput('fFee');
 }
 
 async function submitAddCustomer() {
@@ -626,7 +662,7 @@ async function submitAddCustomer() {
     showToast('⚠️ Vui lòng nhập tên, số điện thoại và biển số');
     return;
   }
-  const fee = parseInt(document.getElementById('fFee').value) || state.settings.monthly_rate;
+  const fee = getCurrencyValue('fFee') || state.settings.monthly_rate;
   const sd = parseInt(document.getElementById('fStartD').value);
   const sm = parseInt(document.getElementById('fStartM').value);
   const sy = parseInt(document.getElementById('fStartY').value);
@@ -674,7 +710,7 @@ async function openCustomerDetail(id) {
     <div style="margin:12px 0;">
       <div style="font-size:14px;font-weight:600;margin-bottom:6px;">💰 Ghi nhận thanh toán</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <input type="number" id="payAmount" placeholder="Số tiền" style="flex:1;min-width:100px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;" value="${c.monthlyFee}">
+        <input type="text" inputmode="numeric" id="payAmount" placeholder="Số tiền" style="flex:1;min-width:100px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;">
         <select id="payMethod" style="padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
           <option value="Tiền mặt">Tiền mặt</option>
           <option value="Chuyển khoản">Chuyển khoản</option>
@@ -702,6 +738,8 @@ async function openCustomerDetail(id) {
     </div>
   `;
   showModal(content);
+  setCurrencyValue('payAmount', c.monthlyFee);
+  initCurrencyInput('payAmount');
 }
 
 function confirmDelete(id) {
@@ -714,7 +752,7 @@ function confirmDelete(id) {
 }
 
 async function submitPayment(customerId) {
-  const amount = parseInt(document.getElementById('payAmount').value);
+  const amount = getCurrencyValue('payAmount');
   const method = document.getElementById('payMethod').value;
   const note = document.getElementById('payNote').value.trim();
   if (!amount || amount <= 0) { showToast('⚠️ Nhập số tiền hợp lệ'); return; }
@@ -732,7 +770,7 @@ function editCustomer(id) {
     <div class="field"><label>Biển số xe</label><input type="text" id="ePlate" value="${escapeHtml(c.plate)}" style="text-transform:uppercase"></div>
     <div class="field"><label>Loại xe</label><input type="text" id="eVehicle" value="${escapeHtml(c.vehicle)}"></div>
     <div class="field"><label>Chỗ đỗ</label><input type="text" id="eSpot" value="${escapeHtml(c.spot)}"></div>
-    <div class="field"><label>Giá tháng (VNĐ)</label><input type="number" id="eFee" value="${c.monthlyFee}"></div>
+    <div class="field"><label>Giá tháng (VNĐ)</label><input type="text" inputmode="numeric" id="eFee"></div>
     <div class="field"><label>Ghi chú</label><textarea id="eNotes">${escapeHtml(c.notes)}</textarea></div>
     <div class="btn-row">
       <button class="btn-secondary" onclick="openCustomerDetail('${c.id}')">Hủy</button>
@@ -740,6 +778,8 @@ function editCustomer(id) {
     </div>
   `;
   showModal(content);
+  setCurrencyValue('eFee', c.monthlyFee);
+  initCurrencyInput('eFee');
 }
 
 async function submitEdit(id) {
@@ -751,7 +791,7 @@ async function submitEdit(id) {
     plate: document.getElementById('ePlate').value.trim().toUpperCase(),
     vehicle: document.getElementById('eVehicle').value.trim(),
     spot: document.getElementById('eSpot').value.trim(),
-    monthlyFee: parseInt(document.getElementById('eFee').value) || 0,
+    monthlyFee: getCurrencyValue('eFee') || 0,
     notes: document.getElementById('eNotes').value.trim()
   });
   openCustomerDetail(id);
