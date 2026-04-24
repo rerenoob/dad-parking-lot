@@ -44,12 +44,12 @@ async function initAuth() {
 }
 
 function showAuth() {
-  document.getElementById('authScreen').classList.add('show');
+  document.getElementById('authScreen').classList.remove('hide');
   document.getElementById('appScreen').classList.remove('show');
 }
 
 function showApp() {
-  document.getElementById('authScreen').classList.remove('show');
+  document.getElementById('authScreen').classList.add('hide');
   document.getElementById('appScreen').classList.add('show');
   document.getElementById('userEmail').textContent = state.user?.email || '';
 }
