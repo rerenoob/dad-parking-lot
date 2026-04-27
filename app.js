@@ -55,7 +55,8 @@ let state = {
   },
   user: null,
   currentPage: 'customers',
-  loading: false
+  loading: false,
+  filterActive: null
 };
 
 // ===== Auth =====
@@ -317,7 +318,7 @@ async function addCustomer(data) {
       spot: data.spot || '',
       monthly_fee: data.monthlyFee || state.settings.monthly_rate,
       notes: data.notes || '',
-      last_payment_date: data.lastPaymentDate || new Date().toISOString()
+      last_payment_date: null
     })
     .select()
     .single();
@@ -515,6 +516,15 @@ function renderCustomers() {
       c.phone.includes(query)
     );
   }
+  if (state.filterActive) {
+    if (state.filterActive === 'active') {
+      customers = customers.filter(c => getDueStatus(c) === 'active');
+    } else if (state.filterActive === 'due-soon') {
+      customers = customers.filter(c => getDueStatus(c) === 'due-soon');
+    } else if (state.filterActive === 'overdue') {
+      customers = customers.filter(c => ['overdue', 'expired'].includes(getDueStatus(c)));
+    }
+  }
   if (customers.length === 0) {
     list.innerHTML = `<div class="empty-state"><div class="icon">🚗</div><p>${query ? 'Không tìm thấy' : 'Chưa có khách hàng nào'}</p></div>`;
     return;
@@ -551,6 +561,26 @@ function renderStats() {
   document.getElementById('statActive').textContent = active;
   document.getElementById('statDue').textContent = dueSoon;
   document.getElementById('statOverdue').textContent = overdue;
+
+  const cardActive = document.getElementById('statCardActive');
+  const cardDue = document.getElementById('statCardDue');
+  const cardOverdue = document.getElementById('statCardOverdue');
+  [cardActive, cardDue, cardOverdue].forEach(el => {
+    if (el) el.classList.remove('filter-active');
+  });
+  if (state.filterActive === 'active' && cardActive) cardActive.classList.add('filter-active');
+  else if (state.filterActive === 'due-soon' && cardDue) cardDue.classList.add('filter-active');
+  else if (state.filterActive === 'overdue' && cardOverdue) cardOverdue.classList.add('filter-active');
+
+  if (cardActive) cardActive.onclick = () => setStatusFilter('active');
+  if (cardDue) cardDue.onclick = () => setStatusFilter('due-soon');
+  if (cardOverdue) cardOverdue.onclick = () => setStatusFilter('overdue');
+}
+
+function setStatusFilter(filter) {
+  state.filterActive = state.filterActive === filter ? null : filter;
+  renderCustomers();
+  renderStats();
 }
 
 function renderHistory() {
@@ -653,28 +683,8 @@ function openAddCustomer() {
     <div class="field"><label>Loại xe</label><input type="text" id="fVehicle" placeholder="VD: Toyota Vios"></div>
     <div class="field"><label>Chỗ đỗ</label><input type="text" id="fSpot" placeholder="VD: A12"></div>
     <div class="field"><label>Giá tháng (VNĐ)</label><input type="text" inputmode="numeric" id="fFee" placeholder="VD: 1,000,000"></div>
-    <div class="field"><label>Ngày bắt đầu</label>
-      <div style="display:flex;gap:8px">
-        ${(()=>{
-          const now = new Date();
-          const d = now.getDate(), m = now.getMonth()+1, y = now.getFullYear();
-          const days = Array.from({length:31},(_,i)=>`<option value="${i+1}" ${i+1===d?'selected':''}>${i+1}</option>`).join('');
-          const months = Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===m?'selected':''}>${i+1}</option>`).join('');
-          const years = Array.from({length:5},(_,i)=>{ const yr=y-2+i; return `<option value="${yr}" ${yr===y?'selected':''}>${yr}</option>`; }).join('');
-          return `<select id="fStartD" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:15px">
-            ${days}
-          </select>
-          <select id="fStartM" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:15px">
-            ${months}
-          </select>
-          <select id="fStartY" style="flex:1.3;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:15px">
-            ${years}
-          </select>`;
-        })()}
-      </div>
-      <div style="font-size:12px;color:#999;margin-top:4px">Ngày — Tháng — Năm</div>
-    </div>
     <div class="field"><label>Ghi chú</label><textarea id="fNotes" placeholder="VD: Tình trạng xe, thỏa thuận đặc biệt..."></textarea></div>
+    <div style="font-size:12px;color:#999;margin-bottom:8px;">💡 Sau khi thêm, ghi nhận thanh toán đầu tiên để xác định ngày bắt đầu.</div>
     <div class="btn-row">
       <button class="btn-secondary" onclick="closeModal2()">Hủy</button>
       <button class="btn-primary" onclick="submitAddCustomer()">Lưu</button>
@@ -694,19 +704,14 @@ async function submitAddCustomer() {
     return;
   }
   const fee = getCurrencyValue('fFee') || state.settings.monthly_rate;
-  const sd = parseInt(document.getElementById('fStartD').value);
-  const sm = parseInt(document.getElementById('fStartM').value);
-  const sy = parseInt(document.getElementById('fStartY').value);
-  const startDate = `${sy}-${String(sm).padStart(2,'0')}-${String(sd).padStart(2,'0')}`;
   const ok = await addCustomer({
     name, phone, plate,
     vehicle: document.getElementById('fVehicle').value.trim(),
     spot: document.getElementById('fSpot').value.trim(),
     monthlyFee: fee,
-    notes: document.getElementById('fNotes').value.trim(),
-    lastPaymentDate: localDateToISO(startDate)
+    notes: document.getElementById('fNotes').value.trim()
   });
-  if (ok) closeModal2();
+  if (ok) openCustomerDetail(state.customers[0].id);
 }
 
 async function openCustomerDetail(id) {

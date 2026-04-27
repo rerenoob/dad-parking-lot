@@ -108,7 +108,10 @@
     .stat-card {
       background: white; border-radius: 10px; padding: 14px 8px;
       text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      cursor: pointer; user-select: none; transition: box-shadow 0.15s, background 0.15s;
     }
+    .stat-card:active { transform: scale(0.97); }
+    .stat-card.filter-active { background: #e8f0fe; box-shadow: 0 0 0 2px #1a73e8; }
     .stat-card .num { font-size: 24px; font-weight: 700; color: #1a73e8; }
     .stat-card .label { font-size: 13px; color: #666; margin-top: 2px; }
 
@@ -363,15 +366,15 @@
       <!-- Page: Danh sách KH -->
       <div class="page active" id="page-customers">
         <div class="stats" id="statsBar">
-          <div class="stat-card">
+          <div class="stat-card" id="statCardActive">
             <div class="num" id="statActive">0</div>
             <div class="label">Đang gửi</div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" id="statCardDue">
             <div class="num" style="color:#e37400" id="statDue">0</div>
             <div class="label">Sắp đến hạn</div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" id="statCardOverdue">
             <div class="num" style="color:#c5221f" id="statOverdue">0</div>
             <div class="label">Quá hạn</div>
           </div>
