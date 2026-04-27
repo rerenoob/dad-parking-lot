@@ -427,7 +427,7 @@ async function recordPayment(customerId, amount, method, note, paymentDate, mont
 
 // ===== Computed =====
 function getDueStatus(customer) {
-  if (!customer.lastPaymentDate) return 'active';
+  if (!customer.lastPaymentDate) return 'no-data';
   const last = new Date(customer.lastPaymentDate);
   const next = addMonths(last, getLastPaymentMonths(customer));
   const now = new Date();
@@ -439,12 +439,12 @@ function getDueStatus(customer) {
 }
 
 function getStatusText(status) {
-  const map = { 'active': 'Còn hạn', 'due-soon': 'Sắp hết hạn', 'overdue': 'Quá hạn', 'expired': 'Hết hạn' };
+  const map = { 'active': 'Còn hạn', 'no-data': 'Chưa xác định', 'due-soon': 'Sắp hết hạn', 'overdue': 'Quá hạn', 'expired': 'Hết hạn' };
   return map[status] || status;
 }
 
 function getStatusBadgeClass(status) {
-  const map = { 'active': 'status-active', 'due-soon': 'status-due-soon', 'overdue': 'status-overdue', 'expired': 'status-expired' };
+  const map = { 'active': 'status-active', 'no-data': 'status-expired', 'due-soon': 'status-due-soon', 'overdue': 'status-overdue', 'expired': 'status-expired' };
   return map[status] || '';
 }
 
