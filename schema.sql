@@ -98,3 +98,8 @@ CREATE INDEX idx_payments_customer_id ON payments(customer_id);
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.customers TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.payments TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.settings TO authenticated;
+
+-- Migration: add payment_date and months_covered to payments
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS payment_date DATE DEFAULT CURRENT_DATE;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS months_covered INTEGER DEFAULT 1;
+CREATE INDEX IF NOT EXISTS idx_payments_payment_date ON payments(payment_date);

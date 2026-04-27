@@ -255,6 +255,9 @@ async function loadCustomers() {
         if (!paymentsMap[p.customer_id]) paymentsMap[p.customer_id] = [];
         paymentsMap[p.customer_id].push(p);
       });
+      Object.keys(paymentsMap).forEach(cid => {
+        paymentsMap[cid].sort((a, b) => new Date(a.payment_date || a.created_at) - new Date(b.payment_date || b.created_at));
+      });
     }
   }
 
@@ -375,30 +378,34 @@ async function deleteCustomer(id) {
   showToast('🗑️ Đã xóa');
 }
 
-async function recordPayment(customerId, amount, method, note) {
+async function recordPayment(customerId, amount, method, note, paymentDate, monthsCovered) {
+  const payDate = paymentDate || new Date().toISOString().split('T')[0];
+  const months = parseInt(monthsCovered) || 1;
   const { data: payment, error: payError } = await db
     .from('payments')
     .insert({
       customer_id: customerId,
       amount: amount,
       method: method || 'Tiền mặt',
-      note: note || ''
+      note: note || '',
+      payment_date: payDate,
+      months_covered: months
     })
     .select()
     .single();
   if (payError) { showToast('⚠️ Lỗi: ' + payError.message); return false; }
 
-  const now = new Date().toISOString();
+  const lastPayDate = localDateToISO(payDate);
   const { error: updError } = await db
     .from('customers')
-    .update({ last_payment_date: now })
+    .update({ last_payment_date: lastPayDate })
     .eq('id', customerId)
     .eq('user_id', state.user.id);
   if (updError) { showToast('⚠️ Lỗi: ' + updError.message); return false; }
 
   const c = state.customers.find(c => c.id === customerId);
   if (c) {
-    c.lastPaymentDate = now;
+    c.lastPaymentDate = lastPayDate;
     if (!c.payments) c.payments = [];
     c.payments.push({
       id: payment.id,
@@ -406,8 +413,11 @@ async function recordPayment(customerId, amount, method, note) {
       amount,
       method: method || 'Tiền mặt',
       note: note || '',
+      payment_date: payDate,
+      months_covered: months,
       created_at: payment.created_at
     });
+    c.payments.sort((a, b) => new Date(a.payment_date || a.created_at) - new Date(b.payment_date || b.created_at));
   }
   renderAll();
   showToast('💰 Đã ghi nhận thanh toán');
@@ -418,7 +428,7 @@ async function recordPayment(customerId, amount, method, note) {
 function getDueStatus(customer) {
   if (!customer.lastPaymentDate) return 'active';
   const last = new Date(customer.lastPaymentDate);
-  const next = addOneMonth(last);
+  const next = addMonths(last, getLastPaymentMonths(customer));
   const now = new Date();
   const daysUntilDue = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
   if (daysUntilDue > state.settings.reminder_days) return 'active';
@@ -437,12 +447,21 @@ function getStatusBadgeClass(status) {
   return map[status] || '';
 }
 
-function addOneMonth(date) {
+function addMonths(date, months) {
   const d = new Date(date);
-  const targetMonth = (d.getMonth() + 1) % 12;
-  d.setMonth(d.getMonth() + 1);
-  if (d.getMonth() !== targetMonth) d.setDate(0);
+  const day = d.getDate();
+  const m = months || 1;
+  d.setDate(1);
+  d.setMonth(d.getMonth() + m);
+  const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, maxDay));
   return d;
+}
+
+function getLastPaymentMonths(customer) {
+  const payments = customer.payments;
+  if (!payments || payments.length === 0) return 1;
+  return payments[payments.length - 1].months_covered || 1;
 }
 
 function localDateToISO(dateStr) {
@@ -464,13 +483,13 @@ function formatDate(dateStr) {
 
 function getNextDueDate(customer) {
   if (!customer.lastPaymentDate) return 'Chưa xác định';
-  return formatDate(addOneMonth(new Date(customer.lastPaymentDate)).toISOString());
+  return formatDate(addMonths(new Date(customer.lastPaymentDate), getLastPaymentMonths(customer)).toISOString());
 }
 
 function getDaysUntilDue(customer) {
   if (!customer.lastPaymentDate) return 0;
   const last = new Date(customer.lastPaymentDate);
-  const next = addOneMonth(last);
+  const next = addMonths(last, getLastPaymentMonths(customer));
   const now = new Date();
   return Math.ceil((next - now) / (1000 * 60 * 60 * 24));
 }
@@ -542,14 +561,14 @@ function renderHistory() {
       });
     }
   });
-  allPayments.sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date));
+  allPayments.sort((a, b) => new Date(b.payment_date || b.created_at || b.date) - new Date(a.payment_date || a.created_at || a.date));
   if (allPayments.length === 0) {
     container.innerHTML = '<div class="empty-state"><div class="icon">💰</div><p>Chưa có giao dịch</p></div>';
     return;
   }
   const groups = {};
   allPayments.forEach(p => {
-    const key = formatDate(p.created_at || p.date);
+    const key = p.payment_date || formatDate(p.created_at || p.date);
     if (!groups[key]) groups[key] = [];
     groups[key].push(p);
   });
@@ -585,7 +604,7 @@ function updateSettingsPage() {
   state.customers.forEach(c => {
     if (c.payments) {
       c.payments.forEach(p => {
-        const pd = new Date(p.created_at || p.date);
+        const pd = new Date(p.payment_date || p.created_at || p.date);
         if (pd.getMonth() === thisMonth && pd.getFullYear() === thisYear) {
           revenue += p.amount;
         }
@@ -692,14 +711,15 @@ async function openCustomerDetail(id) {
   const c = state.customers.find(c => c.id === id);
   if (!c) return;
   const status = getDueStatus(c);
-  const payments = (c.payments || []).map(p => `
+  const payments = (c.payments || []).slice().reverse().map(p => `
     <tr>
-      <td>${formatDate(p.created_at || p.date)}</td>
+      <td>${escapeHtml(p.payment_date || formatDate(p.created_at || p.date))}</td>
       <td>${formatCurrency(p.amount)}</td>
+      <td>${p.months_covered > 1 ? p.months_covered + ' tháng' : '1 tháng'}</td>
       <td>${escapeHtml(p.method)}</td>
       <td style="font-size:12px;color:#999;">${escapeHtml(p.note || '')}</td>
     </tr>
-  `).join('') || '<tr><td colspan="4" style="text-align:center;color:#999;">Chưa có giao dịch</td></tr>';
+  `).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;">Chưa có giao dịch</td></tr>';
 
   const daysNum = getDaysUntilDue(c);
   const dueLabel = !c.lastPaymentDate ? 'chưa xác định' : daysNum > 0 ? `còn ${daysNum} ngày` : daysNum === 0 ? 'hết hạn hôm nay' : `quá hạn ${Math.abs(daysNum)} ngày`;
@@ -726,14 +746,24 @@ async function openCustomerDetail(id) {
           <option value="Chuyển khoản">Chuyển khoản</option>
         </select>
       </div>
-      <input type="text" id="payNote" placeholder="Ghi chú (VD: đóng tháng 4)" style="width:100%;margin-top:6px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;">
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:130px;">
+          <label style="font-size:12px;color:#666;">Ngày thanh toán</label>
+          <input type="date" id="payDate" value="${new Date().toISOString().split('T')[0]}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+        </div>
+        <div style="flex:1;min-width:100px;">
+          <label style="font-size:12px;color:#666;">Số tháng</label>
+          <input type="number" id="payMonths" value="1" min="1" max="24" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+        </div>
+      </div>
+      <input type="text" id="payNote" placeholder="Ghi chú (VD: đóng tháng 4)" style="width:100%;margin-top:6px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
       <button class="btn-success" style="width:100%;margin-top:6px;padding:12px;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;" onclick="submitPayment('${c.id}')">✅ Ghi nhận thanh toán</button>
     </div>
     <div style="margin:12px 0;">
       <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Lịch sử thanh toán</div>
       <div style="overflow-x:auto;">
         <table class="payment-table">
-          <thead><tr><th>Ngày</th><th>Tiền</th><th>Hình thức</th><th>Ghi chú</th></tr></thead>
+          <thead><tr><th>Ngày</th><th>Tiền</th><th>Số tháng</th><th>Hình thức</th><th>Ghi chú</th></tr></thead>
           <tbody>${payments}</tbody>
         </table>
       </div>
@@ -765,8 +795,10 @@ async function submitPayment(customerId) {
   const amount = getCurrencyValue('payAmount');
   const method = document.getElementById('payMethod').value;
   const note = document.getElementById('payNote').value.trim();
+  const paymentDate = document.getElementById('payDate').value;
+  const monthsCovered = parseInt(document.getElementById('payMonths').value) || 1;
   if (!amount || amount <= 0) { showToast('⚠️ Nhập số tiền hợp lệ'); return; }
-  const ok = await recordPayment(customerId, amount, method, note);
+  const ok = await recordPayment(customerId, amount, method, note, paymentDate, monthsCovered);
   if (ok) openCustomerDetail(customerId);
 }
 
