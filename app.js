@@ -262,26 +262,28 @@ async function loadCustomers() {
     }
   }
 
-  state.customers = (data || []).map(c => {
-    const payments = paymentsMap[c.id] || [];
-    // Auto-fix: customers with no payments should have null lastPaymentDate
-    if (payments.length === 0 && c.last_payment_date) {
-      c.last_payment_date = null;
-      db.from('customers').update({ last_payment_date: null }).eq('id', c.id).eq('user_id', state.user.id).catch(() => {});
-    }
-    return {
-      id: c.id,
-      name: c.name,
-      phone: c.phone || '',
-      plate: c.plate,
-      vehicle: c.vehicle || '',
-      spot: c.spot || '',
-      monthlyFee: c.monthly_fee || 0,
-      notes: c.notes || '',
-      lastPaymentDate: c.last_payment_date,
-      createdAt: c.created_at,
-      payments
-    };
+  state.customers = (data || []).map(c => ({
+    id: c.id,
+    name: c.name,
+    phone: c.phone || '',
+    plate: c.plate,
+    vehicle: c.vehicle || '',
+    spot: c.spot || '',
+    monthlyFee: c.monthly_fee || 0,
+    notes: c.notes || '',
+    lastPaymentDate: c.last_payment_date,
+    createdAt: c.created_at,
+    payments: paymentsMap[c.id] || []
+  }));
+  // Auto-fix: customers with no payments should have null lastPaymentDate
+  fixPaymentDates();
+}
+
+function fixPaymentDates() {
+  const toFix = state.customers.filter(c => c.lastPaymentDate && (!c.payments || c.payments.length === 0));
+  toFix.forEach(c => {
+    c.lastPaymentDate = null;
+    db.from('customers').update({ last_payment_date: null }).eq('id', c.id).eq('user_id', state.user.id).catch(() => {});
   });
 }
 
