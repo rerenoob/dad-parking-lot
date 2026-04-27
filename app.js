@@ -478,7 +478,9 @@ function formatCurrency(amount) {
 function formatDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
-  return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;
+  const day = String(d.getDate()).padStart(2, '0');
+  const mon = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}/${mon}/${d.getFullYear()}`;
 }
 
 function getNextDueDate(customer) {
@@ -568,7 +570,7 @@ function renderHistory() {
   }
   const groups = {};
   allPayments.forEach(p => {
-    const key = p.payment_date || formatDate(p.created_at || p.date);
+    const key = formatDate(p.payment_date || p.created_at || p.date);
     if (!groups[key]) groups[key] = [];
     groups[key].push(p);
   });
@@ -713,7 +715,7 @@ async function openCustomerDetail(id) {
   const status = getDueStatus(c);
   const payments = (c.payments || []).slice().reverse().map(p => `
     <tr>
-      <td>${escapeHtml(p.payment_date || formatDate(p.created_at || p.date))}</td>
+      <td>${formatDate(p.payment_date || p.created_at || p.date)}</td>
       <td>${formatCurrency(p.amount)}</td>
       <td>${p.months_covered > 1 ? p.months_covered + ' tháng' : '1 tháng'}</td>
       <td>${escapeHtml(p.method)}</td>
@@ -752,7 +754,7 @@ async function openCustomerDetail(id) {
           <input type="date" id="payDate" value="${new Date().toISOString().split('T')[0]}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
         </div>
         <div style="flex:1;min-width:100px;">
-          <label style="font-size:12px;color:#666;">Số tháng</label>
+          <label style="font-size:12px;color:#666;">Số tháng đóng</label>
           <input type="number" id="payMonths" value="1" min="1" max="24" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
         </div>
       </div>
