@@ -720,8 +720,12 @@ async function openCustomerDetail(id) {
       <td>${p.months_covered > 1 ? p.months_covered + ' tháng' : '1 tháng'}</td>
       <td>${escapeHtml(p.method)}</td>
       <td style="font-size:12px;color:#999;">${escapeHtml(p.note || '')}</td>
+      <td style="white-space:nowrap;">
+        <button onclick="editPayment('${p.id}','${c.id}')" style="background:none;border:none;cursor:pointer;font-size:16px;padding:8px;min-width:40px;min-height:40px;" title="Sửa">✏️</button>
+        <button onclick="deletePayment('${p.id}','${c.id}')" style="background:none;border:none;cursor:pointer;font-size:16px;padding:8px;min-width:40px;min-height:40px;" title="Xóa">🗑️</button>
+      </td>
     </tr>
-  `).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;">Chưa có giao dịch</td></tr>';
+  `).join('') || '<tr><td colspan="6" style="text-align:center;color:#999;">Chưa có giao dịch</td></tr>';
 
   const daysNum = getDaysUntilDue(c);
   const dueLabel = !c.lastPaymentDate ? 'chưa xác định' : daysNum > 0 ? `còn ${daysNum} ngày` : daysNum === 0 ? 'hết hạn hôm nay' : `quá hạn ${Math.abs(daysNum)} ngày`;
@@ -773,7 +777,7 @@ async function openCustomerDetail(id) {
       <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Lịch sử thanh toán</div>
       <div style="overflow-x:auto;">
         <table class="payment-table">
-          <thead><tr><th>Ngày</th><th>Tiền</th><th>Số tháng</th><th>Hình thức</th><th>Ghi chú</th></tr></thead>
+          <thead><tr><th>Ngày</th><th>Tiền</th><th>Số tháng</th><th>Hình thức</th><th>Ghi chú</th><th>Thao tác</th></tr></thead>
           <tbody>${payments}</tbody>
         </table>
       </div>
@@ -813,6 +817,134 @@ async function submitPayment(customerId) {
   if (!amount || amount <= 0) { showToast('⚠️ Nhập số tiền hợp lệ'); return; }
   const ok = await recordPayment(customerId, amount, method, note, paymentDate, monthsCovered);
   if (ok) openCustomerDetail(customerId);
+}
+
+// ===== Payment Edit/Delete =====
+function editPayment(paymentId, customerId) {
+  const c = state.customers.find(c => c.id === customerId);
+  const p = c && c.payments && c.payments.find(p => p.id === paymentId);
+  if (!p) return;
+
+  const dateStr = p.payment_date || (p.created_at ? p.created_at.split('T')[0] : '');
+  let pd = 1, pm = 1, py = new Date().getFullYear();
+  if (dateStr) {
+    const parts = dateStr.split('-');
+    py = parseInt(parts[0]) || py;
+    pm = parseInt(parts[1]) || pm;
+    pd = parseInt(parts[2]) || pd;
+  }
+
+  const days = Array.from({length:31},(_,i)=>`<option value="${i+1}" ${i+1===pd?'selected':''}>${i+1}</option>`).join('');
+  const months = Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===pm?'selected':''}>Tháng ${i+1}</option>`).join('');
+  const years = Array.from({length:10},(_,i)=>{ const yr=2022+i; return `<option value="${yr}" ${yr===py?'selected':''}>${yr}</option>`; }).join('');
+
+  const content = `
+    <h2>✏️ Sửa giao dịch</h2>
+    <div class="field"><label>Ngày thanh toán</label>
+      <div style="display:flex;gap:6px;">
+        <select id="editPayDay" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${days}</select>
+        <select id="editPayMonth" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${months}</select>
+        <select id="editPayYear" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${years}</select>
+      </div>
+      <div style="font-size:12px;color:#999;margin-top:4px">Ngày — Tháng — Năm</div>
+    </div>
+    <div class="field"><label>Số tiền (VNĐ)</label>
+      <input type="text" inputmode="numeric" id="editPayAmount" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+    </div>
+    <div class="field"><label>Hình thức</label>
+      <select id="editPayMethod" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
+        <option value="Tiền mặt" ${p.method==='Tiền mặt'?'selected':''}>Tiền mặt</option>
+        <option value="Chuyển khoản" ${p.method==='Chuyển khoản'?'selected':''}>Chuyển khoản</option>
+      </select>
+    </div>
+    <div class="field"><label>Số tháng đóng</label>
+      <input type="number" id="editPayMonths" value="${p.months_covered || 1}" min="1" max="24" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+    </div>
+    <div class="field"><label>Ghi chú</label>
+      <input type="text" id="editPayNote" value="${escapeHtml(p.note || '')}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+    </div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="openCustomerDetail('${customerId}')">Hủy</button>
+      <button class="btn-primary" onclick="submitEditPayment('${paymentId}','${customerId}')">Lưu</button>
+    </div>
+  `;
+  showModal(content);
+  setCurrencyValue('editPayAmount', p.amount);
+  initCurrencyInput('editPayAmount');
+}
+
+async function submitEditPayment(paymentId, customerId) {
+  const amount = getCurrencyValue('editPayAmount');
+  if (!amount || amount <= 0) { showToast('⚠️ Nhập số tiền hợp lệ'); return; }
+  const day = document.getElementById('editPayDay').value.padStart(2, '0');
+  const month = document.getElementById('editPayMonth').value.padStart(2, '0');
+  const year = document.getElementById('editPayYear').value;
+  const paymentDate = `${year}-${month}-${day}`;
+  const method = document.getElementById('editPayMethod').value;
+  const monthsCovered = parseInt(document.getElementById('editPayMonths').value) || 1;
+  const note = document.getElementById('editPayNote').value.trim();
+
+  const { error } = await db.from('payments').update({
+    amount,
+    payment_date: paymentDate,
+    method,
+    months_covered: monthsCovered,
+    note
+  }).eq('id', paymentId);
+  if (error) { showToast('⚠️ Lỗi: ' + error.message); return; }
+
+  const c = state.customers.find(c => c.id === customerId);
+  if (c) {
+    const p = c.payments.find(p => p.id === paymentId);
+    if (p) {
+      p.amount = amount;
+      p.payment_date = paymentDate;
+      p.method = method;
+      p.months_covered = monthsCovered;
+      p.note = note;
+    }
+    c.payments.sort((a, b) => new Date(a.payment_date || a.created_at) - new Date(b.payment_date || b.created_at));
+    await recalcLastPaymentDate(customerId);
+  }
+  renderAll();
+  showToast('✅ Đã cập nhật giao dịch');
+  openCustomerDetail(customerId);
+}
+
+async function deletePayment(paymentId, customerId) {
+  const c = state.customers.find(c => c.id === customerId);
+  const p = c && c.payments && c.payments.find(p => p.id === paymentId);
+  if (!p) return;
+  const dateStr = formatDate(p.payment_date || p.created_at);
+  const amountStr = formatCurrency(p.amount);
+  if (!confirm(`Xóa giao dịch ngày ${dateStr} số tiền ${amountStr}?`)) return;
+
+  const { error } = await db.from('payments').delete().eq('id', paymentId);
+  if (error) { showToast('⚠️ Lỗi: ' + error.message); return; }
+
+  if (c) {
+    c.payments = c.payments.filter(pay => pay.id !== paymentId);
+    if (c.payments.length > 0) {
+      await recalcLastPaymentDate(customerId);
+    }
+  }
+  renderAll();
+  showToast('🗑️ Đã xóa giao dịch');
+  openCustomerDetail(customerId);
+}
+
+async function recalcLastPaymentDate(customerId) {
+  const c = state.customers.find(c => c.id === customerId);
+  if (!c || !c.payments || c.payments.length === 0) return;
+  const sorted = c.payments.slice().sort((a, b) =>
+    new Date(b.payment_date || b.created_at) - new Date(a.payment_date || a.created_at)
+  );
+  const latest = sorted[0];
+  const dateKey = latest.payment_date || (latest.created_at ? latest.created_at.split('T')[0] : null);
+  const newLastPayDate = localDateToISO(dateKey);
+  const { error } = await db.from('customers').update({ last_payment_date: newLastPayDate }).eq('id', customerId).eq('user_id', state.user.id);
+  if (error) { showToast('⚠️ Lỗi cập nhật ngày: ' + error.message); return; }
+  c.lastPaymentDate = newLastPayDate;
 }
 
 function editCustomer(id) {
