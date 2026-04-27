@@ -926,6 +926,10 @@ async function deletePayment(paymentId, customerId) {
     c.payments = c.payments.filter(pay => pay.id !== paymentId);
     if (c.payments.length > 0) {
       await recalcLastPaymentDate(customerId);
+    } else {
+      c.lastPaymentDate = null;
+      const { error: clearErr } = await db.from('customers').update({ last_payment_date: null }).eq('id', customerId).eq('user_id', state.user.id);
+      if (clearErr) { showToast('⚠️ Lỗi cập nhật ngày: ' + clearErr.message); return; }
     }
   }
   renderAll();
