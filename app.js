@@ -748,15 +748,23 @@ async function openCustomerDetail(id) {
           <option value="Chuyển khoản">Chuyển khoản</option>
         </select>
       </div>
-      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
-        <div style="flex:1;min-width:130px;">
-          <label style="font-size:12px;color:#666;">Ngày thanh toán</label>
-          <input type="date" id="payDate" value="${new Date().toISOString().split('T')[0]}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+      <div style="margin-top:6px;">
+        <label style="font-size:12px;color:#666;margin-bottom:2px;display:block;">Ngày thanh toán</label>
+        <div style="display:flex;gap:6px;">
+          <select id="payDay" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
+            ${Array.from({length:31},(_,i)=>'<option value="'+(i+1)+'"'+(i+1===parseInt(new Date().toISOString().split('T')[0].split('-')[2])?' selected':'')+'>'+(i+1)+'</option>').join('')}
+          </select>
+          <select id="payMonth" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
+            ${Array.from({length:12},(_,i)=>'<option value="'+(i+1)+'"'+(i+1===parseInt(new Date().toISOString().split('T')[0].split('-')[1])?' selected':'')+'>Tháng '+(i+1)+'</option>').join('')}
+          </select>
+          <select id="payYear" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
+            ${Array.from({length:10},(_,i)=>'<option value="'+(2022+i)+'"'+(2022+i===parseInt(new Date().toISOString().split('T')[0].split('-')[0])?' selected':'')+'>'+(2022+i)+'</option>').join('')}
+          </select>
         </div>
-        <div style="flex:1;min-width:100px;">
-          <label style="font-size:12px;color:#666;">Số tháng đóng</label>
-          <input type="number" id="payMonths" value="1" min="1" max="24" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
-        </div>
+      </div>
+      <div style="margin-top:6px;">
+        <label style="font-size:12px;color:#666;margin-bottom:2px;display:block;">Số tháng đóng (1, 2, 3...)</label>
+        <input type="number" id="payMonths" value="1" min="1" max="24" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
       </div>
       <input type="text" id="payNote" placeholder="Ghi chú (VD: đóng tháng 4)" style="width:100%;margin-top:6px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
       <button class="btn-success" style="width:100%;margin-top:6px;padding:12px;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;" onclick="submitPayment('${c.id}')">✅ Ghi nhận thanh toán</button>
@@ -797,7 +805,10 @@ async function submitPayment(customerId) {
   const amount = getCurrencyValue('payAmount');
   const method = document.getElementById('payMethod').value;
   const note = document.getElementById('payNote').value.trim();
-  const paymentDate = document.getElementById('payDate').value;
+  const payDay = document.getElementById('payDay').value.padStart(2,'0');
+  const payMonth = document.getElementById('payMonth').value.padStart(2,'0');
+  const payYear = document.getElementById('payYear').value;
+  const paymentDate = payYear+'-'+payMonth+'-'+payDay;
   const monthsCovered = parseInt(document.getElementById('payMonths').value) || 1;
   if (!amount || amount <= 0) { showToast('⚠️ Nhập số tiền hợp lệ'); return; }
   const ok = await recordPayment(customerId, amount, method, note, paymentDate, monthsCovered);
