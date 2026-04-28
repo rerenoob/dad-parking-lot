@@ -276,8 +276,7 @@ async function loadCustomers() {
       id: c.id, name: c.name, phone: c.phone || '', plate: c.plate,
       vehicle: c.vehicle || '', spot: c.spot || '',
       monthlyFee: c.monthly_fee || 0, notes: c.notes || '',
-      lastPaymentDate: lpd, createdAt: c.created_at, payments,
-      contactZalo: c.contact_zalo || false
+      lastPaymentDate: lpd, createdAt: c.created_at, payments
     };
   });
 }
@@ -323,8 +322,7 @@ async function addCustomer(data) {
       spot: data.spot || '',
       monthly_fee: data.monthlyFee || state.settings.monthly_rate,
       notes: data.notes || '',
-      last_payment_date: data.lastPaymentDate || null,
-      contact_zalo: data.contactZalo || false
+      last_payment_date: data.lastPaymentDate || null
     })
     .select()
     .single();
@@ -341,8 +339,7 @@ async function addCustomer(data) {
     notes: result.notes || '',
     lastPaymentDate: result.last_payment_date,
     createdAt: result.created_at,
-    payments: [],
-    contactZalo: result.contact_zalo || false
+    payments: []
   });
   renderAll();
   showToast('✅ Đã thêm khách hàng');
@@ -359,7 +356,6 @@ async function updateCustomer(id, data) {
   if (data.monthlyFee !== undefined) updateData.monthly_fee = data.monthlyFee;
   if (data.notes !== undefined) updateData.notes = data.notes;
   if (data.lastPaymentDate !== undefined) updateData.last_payment_date = data.lastPaymentDate;
-  if (data.contactZalo !== undefined) updateData.contact_zalo = data.contactZalo;
 
   const { error } = await db
     .from('customers')
@@ -546,7 +542,7 @@ function renderCustomers() {
         <div class="name">${escapeHtml(c.name)}</div>
         <div class="plate">${escapeHtml(c.plate)}${c.vehicle ? ' · ' + escapeHtml(c.vehicle) : ''}</div>
         <div class="meta">
-          ${c.contactZalo ? '<span style="color:#0068FF;">💬 Zalo</span>' : c.phone ? `<a href="tel:${escapeHtml(c.phone)}" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;">📞 ${escapeHtml(c.phone)}</a>` : ''}
+          <a href="tel:${escapeHtml(c.phone)}" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;">📞 ${escapeHtml(c.phone)}</a>
           <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span>
         </div>
         <div class="meta">
@@ -688,8 +684,7 @@ function openAddCustomer() {
   const content = `
     <h2>➕ Thêm khách hàng</h2>
     <div class="field"><label>Tên khách *</label><input type="text" id="fName" placeholder="VD: Nguyễn Văn A"></div>
-    <div class="field"><label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="fZalo" onchange="togglePhoneField('f')" style="width:18px;height:18px;accent-color:#0068FF;"><span>Liên hệ qua Zalo (số điện thoại ẩn)</span></label></div>
-    <div id="fPhoneGroup"><div class="field"><label>Số điện thoại</label><input type="tel" id="fPhone" placeholder="VD: 0901234567"></div></div>
+    <div class="field"><label>Số điện thoại *</label><input type="tel" id="fPhone" placeholder="VD: 0901234567"></div>
     <div class="field"><label>Biển số xe *</label><input type="text" id="fPlate" placeholder="VD: 51A-12345" style="text-transform:uppercase"></div>
     <div class="field"><label>Loại xe</label><input type="text" id="fVehicle" placeholder="VD: Toyota Vios"></div>
     <div class="field"><label>Chỗ đỗ</label><input type="text" id="fSpot" placeholder="VD: A12"></div>
@@ -723,8 +718,8 @@ async function submitAddCustomer() {
   const name = document.getElementById('fName').value.trim();
   const phone = document.getElementById('fPhone').value.trim();
   const plate = document.getElementById('fPlate').value.trim();
-  if (!name || !plate) {
-    showToast('⚠️ Vui lòng nhập tên và biển số');
+  if (!name || !phone || !plate) {
+    showToast('⚠️ Vui lòng nhập tên, số điện thoại và biển số');
     return;
   }
   const fee = getCurrencyValue('fFee') || state.settings.monthly_rate;
@@ -738,8 +733,7 @@ async function submitAddCustomer() {
     spot: document.getElementById('fSpot').value.trim(),
     monthlyFee: fee,
     notes: document.getElementById('fNotes').value.trim(),
-    lastPaymentDate: startDate,
-    contactZalo: document.getElementById('fZalo').checked
+    lastPaymentDate: startDate
   });
   if (!ok) return;
   const newCustomer = state.customers[0];
@@ -773,7 +767,7 @@ async function openCustomerDetail(id) {
     <div style="margin-bottom:12px;">
       <div class="field" style="display:flex;justify-content:space-between;margin-bottom:4px;">
         <span style="font-size:14px;"><strong>🪪 Biển số:</strong> ${escapeHtml(c.plate)}</span>
-        ${c.contactZalo ? '<span style="font-size:14px;color:#0068FF;">💬 Zalo</span>' : c.phone ? `<a href="tel:${escapeHtml(c.phone)}" style="font-size:14px;color:inherit;text-decoration:none;"><strong>📞</strong> ${escapeHtml(c.phone)}</a>` : ''}
+        <a href="tel:${escapeHtml(c.phone)}" style="font-size:14px;color:inherit;text-decoration:none;"><strong>📞</strong> ${escapeHtml(c.phone)}</a>
       </div>
       <div style="font-size:14px;margin-bottom:4px;">${c.vehicle ? '🚗 ' + escapeHtml(c.vehicle) : ''}${c.spot ? ' · 🅿️ ' + escapeHtml(c.spot) : ''}</div>
       <div style="font-size:14px;margin-bottom:4px;"><strong>💰 Giá tháng:</strong> ${formatCurrency(c.monthlyFee)}</div>
@@ -1003,8 +997,7 @@ function editCustomer(id) {
   const content = `
     <h2>✏️ Sửa thông tin</h2>
     <div class="field"><label>Tên khách</label><input type="text" id="eName" value="${escapeHtml(c.name)}"></div>
-    <div class="field"><label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="eZalo" onchange="togglePhoneField('e')" style="width:18px;height:18px;accent-color:#0068FF;"${c.contactZalo ? ' checked' : ''}><span>Liên hệ qua Zalo (số điện thoại ẩn)</span></label></div>
-    <div id="ePhoneGroup"><div class="field"><label>Số điện thoại</label><input type="tel" id="ePhone" value="${escapeHtml(c.phone)}"></div></div>
+    <div class="field"><label>Số điện thoại</label><input type="tel" id="ePhone" value="${escapeHtml(c.phone)}"></div>
     <div class="field"><label>Biển số xe</label><input type="text" id="ePlate" value="${escapeHtml(c.plate)}" style="text-transform:uppercase"></div>
     <div class="field"><label>Loại xe</label><input type="text" id="eVehicle" value="${escapeHtml(c.vehicle)}"></div>
     <div class="field"><label>Chỗ đỗ</label><input type="text" id="eSpot" value="${escapeHtml(c.spot)}"></div>
@@ -1032,7 +1025,6 @@ function editCustomer(id) {
   showModal(content);
   setCurrencyValue('eFee', c.monthlyFee);
   initCurrencyInput('eFee');
-  togglePhoneField('e');
 }
 
 async function submitEdit(id) {
@@ -1050,8 +1042,7 @@ async function submitEdit(id) {
     spot: document.getElementById('eSpot').value.trim(),
     monthlyFee: getCurrencyValue('eFee') || 0,
     notes: document.getElementById('eNotes').value.trim(),
-    lastPaymentDate,
-    contactZalo: document.getElementById('eZalo').checked
+    lastPaymentDate
   });
   openCustomerDetail(id);
 }
@@ -1080,7 +1071,7 @@ function sendReminder(customerId) {
         <h2>📨 Gửi nhắc nhở</h2>
         <p style="font-size:14px;margin-bottom:12px;padding:10px;background:#f5f5f5;border-radius:8px;">${escapeHtml(msg)}</p>
         <div class="btn-row">
-          ${c.phone ? `<button class="btn-primary" onclick="window.open('sms:' + window._reminderPhone + '?body=' + encodeURIComponent(window._reminderMsg), '_blank');closeModal2();" style="flex:1;">💬 Gửi SMS</button>` : ''}
+          <button class="btn-primary" onclick="window.open('sms:' + window._reminderPhone + '?body=' + encodeURIComponent(window._reminderMsg), '_blank');closeModal2();" style="flex:1;">💬 Gửi SMS</button>
           <button class="btn-success" onclick="navigator.clipboard.writeText(window._reminderMsg);showToast('📋 Đã copy, dán vào Zalo');closeModal2();" style="flex:1;">📱 Gửi Zalo</button>
         </div>
         <div class="btn-row">
@@ -1089,23 +1080,6 @@ function sendReminder(customerId) {
       `;
       showModal(content);
     }, 500);
-  }
-}
-
-function togglePhoneField(prefix) {
-  const cb = document.getElementById(prefix + 'Zalo');
-  const group = document.getElementById(prefix + 'PhoneGroup');
-  const existingBadge = document.getElementById(prefix + 'ZaloBadge');
-  if (existingBadge) existingBadge.remove();
-  if (cb.checked) {
-    group.style.display = 'none';
-    const badge = document.createElement('div');
-    badge.id = prefix + 'ZaloBadge';
-    badge.className = 'field';
-    badge.innerHTML = '<label>Liên hệ</label><div style="padding:10px;background:#f0f7ff;border:1px solid #0068FF;border-radius:8px;color:#0068FF;font-size:15px;">💬 Liên hệ qua Zalo</div>';
-    group.parentNode.insertBefore(badge, group.nextSibling);
-  } else {
-    group.style.display = '';
   }
 }
 
@@ -1127,7 +1101,7 @@ function showDueSoon() {
         <div class="name">${escapeHtml(c.name)}</div>
         <div class="plate">${escapeHtml(c.plate)}</div>
         <div class="meta">
-          ${c.contactZalo ? '<span style="color:#0068FF;">💬 Zalo</span>' : c.phone ? `<a href="tel:${escapeHtml(c.phone)}" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;">📞 ${escapeHtml(c.phone)}</a>` : ''}
+          <a href="tel:${escapeHtml(c.phone)}" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;">📞 ${escapeHtml(c.phone)}</a>
           <span class="status-badge ${getStatusBadgeClass(status)}">${daysText}</span>
         </div>
         <div class="meta">
