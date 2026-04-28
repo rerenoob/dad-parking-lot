@@ -726,16 +726,19 @@ async function submitAddCustomer() {
   const fPayDay = document.getElementById('fPayDay').value.padStart(2, '0');
   const fPayMonth = document.getElementById('fPayMonth').value.padStart(2, '0');
   const fPayYear = document.getElementById('fPayYear').value;
-  const lastPaymentDate = localDateToISO(`${fPayYear}-${fPayMonth}-${fPayDay}`);
+  const startDate = localDateToISO(`${fPayYear}-${fPayMonth}-${fPayDay}`);
   const ok = await addCustomer({
     name, phone, plate,
     vehicle: document.getElementById('fVehicle').value.trim(),
     spot: document.getElementById('fSpot').value.trim(),
     monthlyFee: fee,
     notes: document.getElementById('fNotes').value.trim(),
-    lastPaymentDate
+    lastPaymentDate: startDate
   });
-  if (ok) openCustomerDetail(state.customers[0].id);
+  if (!ok) return;
+  const newCustomer = state.customers[0];
+  await recordPayment(newCustomer.id, newCustomer.monthlyFee, 'Tiền mặt', 'Thanh toán đầu tiên', startDate, 1);
+  openCustomerDetail(newCustomer.id);
 }
 
 async function openCustomerDetail(id) {
