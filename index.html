@@ -120,14 +120,15 @@
       display: flex; gap: 8px; margin-bottom: 12px;
     }
     .actions button {
-      flex: 1; padding: 16px; border: none; border-radius: 10px;
-      font-size: 16px; font-weight: 600; cursor: pointer;
+      flex: 1; padding: 12px 8px; border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
       transition: transform 0.1s;
       min-height: 52px;
     }
     .actions button:active { transform: scale(0.97); }
     .btn-add { background: #1a73e8; color: white; }
     .btn-remind { background: #34a853; color: white; }
+    .btn-report { background: #e67e22; color: white; }
 
     /* Search */
     .search-bar {
@@ -383,6 +384,7 @@
         <div class="actions">
           <button class="btn-add" onclick="openAddCustomer()">➕ Thêm khách</button>
           <button class="btn-remind" onclick="showDueSoon()">🔔 Nhắc hạn</button>
+          <button class="btn-report" onclick="showReportsModal()">📊 Báo cáo</button>
         </div>
 
         <div class="search-bar">

@@ -307,7 +307,7 @@ async function saveSettingsToDB() {
       total_spots: state.settings.total_spots,
       reminder_days: state.settings.reminder_days
     }, { onConflict: 'user_id' });
-  if (error) console.error('Error saving settings:', error);
+  if (error) { console.error('Error saving settings:', error); showToast('⚠️ Lỗi lưu cài đặt — thử lại sau'); }
 }
 
 // ===== Customer CRUD =====
@@ -519,10 +519,10 @@ function renderCustomers() {
   let customers = state.customers;
   if (query) {
     customers = customers.filter(c =>
-      c.plate.toLowerCase().includes(query) ||
-      c.name.toLowerCase().includes(query) ||
-      c.phone.includes(query) ||
-      (c.vehicle || "").toLowerCase().includes(query)
+      (c.plate || '').toLowerCase().includes(query) ||
+      (c.name || '').toLowerCase().includes(query) ||
+      (c.phone || '').includes(query) ||
+      (c.vehicle || '').toLowerCase().includes(query)
     );
   }
   if (state.filterActive) {
@@ -1151,6 +1151,138 @@ function showDueSoon() {
   showModal(content);
 }
 
+// ===== Reports =====
+function showReportsModal() {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
+  const monthOptions = Array.from({length: 12}, (_, i) =>
+    `<option value="${i+1}"${i+1 === currentMonth ? ' selected' : ''}>Tháng ${i+1}</option>`
+  ).join('');
+
+  const yearOptions = Array.from({length: 7}, (_, i) => {
+    const yr = 2022 + i;
+    return `<option value="${yr}"${yr === currentYear ? ' selected' : ''}>${yr}</option>`;
+  }).join('');
+
+  const content = `
+    <h2>📊 Báo cáo doanh thu</h2>
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap;">
+      <select id="reportMonth" style="flex:1;min-width:90px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${monthOptions}</select>
+      <select id="reportYear" style="flex:1;min-width:80px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${yearOptions}</select>
+      <button class="btn-primary" onclick="renderReportBody()" style="padding:10px 14px;border:none;font-size:14px;font-weight:600;cursor:pointer;border-radius:8px;white-space:nowrap;">Xem báo cáo</button>
+    </div>
+    <div id="reportBody"></div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="closeModal2()">Đóng</button>
+    </div>
+  `;
+  showModal(content);
+  renderReportBody();
+}
+
+function renderReportBody() {
+  const bodyEl = document.getElementById('reportBody');
+  const monthEl = document.getElementById('reportMonth');
+  const yearEl = document.getElementById('reportYear');
+  if (!bodyEl || !monthEl || !yearEl) return;
+
+  const month = parseInt(monthEl.value);
+  const year = parseInt(yearEl.value);
+
+  let revenue = 0;
+  const payingCustomerIds = new Set();
+
+  state.customers.forEach(c => {
+    (c.payments || []).forEach(p => {
+      const pd = new Date(p.payment_date || p.created_at);
+      if (pd.getMonth() + 1 === month && pd.getFullYear() === year) {
+        revenue += (p.amount || 0);
+        payingCustomerIds.add(c.id);
+      }
+    });
+  });
+
+  const totalCustomers = state.customers.length;
+  const paidCount = payingCustomerIds.size;
+  const paidRate = totalCustomers > 0 ? ((paidCount / totalCustomers) * 100).toFixed(1) : '0.0';
+  const rateColor = parseFloat(paidRate) >= 80 ? '#1e7e34' : parseFloat(paidRate) >= 50 ? '#e37400' : '#c5221f';
+
+  const unpaidCustomers = state.customers.filter(c => !payingCustomerIds.has(c.id));
+
+  const unpaidHtml = unpaidCustomers.length === 0
+    ? '<div style="color:#1e7e34;font-size:14px;padding:8px 0;">✅ Tất cả khách đã đóng phí tháng này</div>'
+    : unpaidCustomers.map(c => `
+        <div class="history-item" onclick="openCustomerDetail('${c.id}')" style="margin-bottom:4px;">
+          <div>
+            <strong>${escapeHtml(c.name)}</strong>
+            <div style="font-size:12px;color:#999;">${escapeHtml(c.plate || '')}</div>
+          </div>
+          <span class="status-badge status-overdue">Chưa đóng</span>
+        </div>
+      `).join('');
+
+  // Last 6 months revenue
+  const sixMonths = [];
+  for (let i = 5; i >= 0; i--) {
+    let m = month - i;
+    let y = year;
+    while (m <= 0) { m += 12; y--; }
+    let mRev = 0;
+    const mPayers = new Set();
+    state.customers.forEach(c => {
+      (c.payments || []).forEach(p => {
+        const pd = new Date(p.payment_date || p.created_at);
+        if (pd.getMonth() + 1 === m && pd.getFullYear() === y) {
+          mRev += (p.amount || 0);
+          mPayers.add(c.id);
+        }
+      });
+    });
+    sixMonths.push({ label: `${m}/${y}`, revenue: mRev, count: mPayers.size });
+  }
+
+  const tableRows = sixMonths.map((d, idx) => {
+    const isCurrent = idx === 5;
+    return `<tr${isCurrent ? ' style="font-weight:600;background:#f0f7ff;"' : ''}>
+      <td>Tháng ${d.label}</td>
+      <td style="text-align:right;color:#1e7e34;">${formatCurrency(d.revenue)}</td>
+      <td style="text-align:right;">${d.count}</td>
+    </tr>`;
+  }).join('');
+
+  bodyEl.innerHTML = `
+    <div style="background:#f9f9f9;border-radius:10px;padding:14px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
+        <span style="font-size:14px;color:#555;">💰 Doanh thu tháng ${month}/${year}</span>
+        <span style="font-size:17px;font-weight:700;color:#1e7e34;">${formatCurrency(revenue)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
+        <span style="font-size:14px;color:#555;">✅ Tổng số khách hàng đã đóng</span>
+        <span style="font-size:17px;font-weight:700;color:#1a73e8;">${paidCount}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
+        <span style="font-size:14px;color:#555;">👥 Tổng số khách hàng</span>
+        <span style="font-size:17px;font-weight:700;">${totalCustomers}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
+        <span style="font-size:14px;color:#555;">📈 Tỉ lệ đóng phí</span>
+        <span style="font-size:17px;font-weight:700;color:${rateColor};">${paidRate}%</span>
+      </div>
+    </div>
+    <div style="font-size:14px;font-weight:600;margin-bottom:8px;">❌ Khách chưa đóng (${unpaidCustomers.length} người)</div>
+    <div style="max-height:180px;overflow-y:auto;margin-bottom:14px;">${unpaidHtml}</div>
+    <div style="font-size:14px;font-weight:600;margin-bottom:8px;">📅 Doanh thu 6 tháng gần nhất</div>
+    <div style="overflow-x:auto;">
+      <table class="payment-table">
+        <thead><tr><th>Tháng</th><th style="text-align:right;">Doanh thu</th><th style="text-align:right;">Số KH đóng</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 // ===== Utility =====
 function showModal(html) {
   const modal = document.getElementById('modalContent');
@@ -1227,3 +1359,80 @@ function importData(event) {
 }
 
 document.addEventListener('DOMContentLoaded', initAuth);
+
+/*
+ * =====================================================================
+ * CODE AUDIT REPORT — Bãi xe Thành Dương / app.js
+ * Audited: 2026-04-28
+ * =====================================================================
+ *
+ * Finding #1
+ * Severity: HIGH — FIXED
+ * Description: Null/undefined crash in search filter. `c.phone.includes(query)`,
+ *   `c.plate.toLowerCase()`, and `c.name.toLowerCase()` all throw TypeError if the
+ *   field is null or undefined. This can happen when data is loaded via importData()
+ *   from a JSON file that doesn't guarantee these fields are strings.
+ * Lines: 519–526 (renderCustomers)
+ * Fix Applied: Added `|| ''` fallback for each field:
+ *   (c.plate || '').toLowerCase(), (c.name || '').toLowerCase(), (c.phone || '').includes()
+ *
+ * Finding #2
+ * Severity: MEDIUM — FIXED
+ * Description: saveSettingsToDB() silently swallows errors — the user receives no
+ *   feedback if the DB write fails (e.g. network error, RLS rejection). Settings
+ *   appear saved locally but the server state diverges.
+ * Line: 310 (saveSettingsToDB)
+ * Fix Applied: Added showToast('⚠️ Lỗi lưu cài đặt — thử lại sau') in the error branch.
+ *
+ * Finding #3
+ * Severity: MEDIUM
+ * Description: deletePayment (line 961) and submitEditPayment (line 926) update/delete
+ *   from the `payments` table using only the payment ID with no user ownership check.
+ *   The payments table has no user_id column; ownership flows through customer_id →
+ *   customers.user_id. If Supabase Row Level Security is not configured on the payments
+ *   table, a user who obtains another user's payment UUID could delete or modify it.
+ * Lines: 926, 961
+ * Suggested Fix: Ensure Supabase RLS policy on `payments` enforces ownership via a
+ *   join: `USING (customer_id IN (SELECT id FROM customers WHERE user_id = auth.uid()))`.
+ *   No app-code change can substitute for proper DB-level RLS here.
+ *
+ * Finding #4
+ * Severity: LOW
+ * Description: Dead property reference `p.date` appears in three places
+ *   (renderHistory sort, renderHistory grouping key, updateSettingsPage revenue calc).
+ *   No payment object ever has a `.date` field — the correct fields are
+ *   `payment_date` and `created_at`. The `|| p.date` fallback silently evaluates to
+ *   undefined and is ignored, so there is no runtime error, but it's misleading.
+ * Lines: 605, 612, 648
+ * Suggested Fix: Remove the `|| p.date` fallbacks from all three locations.
+ *
+ * Finding #5
+ * Severity: LOW
+ * Description: window._reminderPhone and window._reminderMsg are set as global window
+ *   properties in sendReminder() to pass data into a delayed modal. If sendReminder()
+ *   is called twice within 500 ms (e.g. tapping two customer cards rapidly), the second
+ *   call overwrites these globals before the first setTimeout fires, causing the first
+ *   modal to show the wrong customer's data.
+ * Lines: 1076–1078
+ * Suggested Fix: Capture the values in a closure instead of using window globals:
+ *   const phone = c.phone; const msg = msg; setTimeout(() => { ... use phone/msg ... }, 500)
+ *
+ * Finding #6
+ * Severity: LOW
+ * Description: submitAddCustomer() triggers two full renderAll() cycles — one inside
+ *   addCustomer() and one inside recordPayment(). On a large customer list this causes
+ *   two complete DOM re-renders in rapid succession with no visible benefit.
+ * Lines: 347, 432 (called from submitAddCustomer at lines 736–748)
+ * Suggested Fix: Suppress the renderAll() inside addCustomer() when called from
+ *   submitAddCustomer, or batch the two DB operations and call renderAll() once at
+ *   the end. Low priority — only noticeable with 100+ customers.
+ *
+ * Finding #7
+ * Severity: LOW
+ * Description: formatDate() with an invalid or unparseable dateStr returns 'NaN/NaN/NaN'
+ *   instead of an empty string or a meaningful fallback, since d.getDate() returns NaN.
+ * Line: 487–493
+ * Suggested Fix: Add a guard: `if (isNaN(d.getTime())) return '';`
+ *
+ * =====================================================================
+ */
