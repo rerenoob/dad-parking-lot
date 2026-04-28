@@ -521,7 +521,8 @@ function renderCustomers() {
     customers = customers.filter(c =>
       c.plate.toLowerCase().includes(query) ||
       c.name.toLowerCase().includes(query) ||
-      c.phone.includes(query)
+      c.phone.includes(query) ||
+      (c.vehicle || "").toLowerCase().includes(query)
     );
   }
   if (state.filterActive) {
