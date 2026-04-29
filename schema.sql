@@ -12,6 +12,7 @@ CREATE TABLE customers (
   spot TEXT DEFAULT '',
   monthly_fee INTEGER DEFAULT 0,
   notes TEXT DEFAULT '',
+  active BOOLEAN DEFAULT TRUE,
   last_payment_date TIMESTAMPTZ DEFAULT now(),
   created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -103,3 +104,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.settings TO authenticated;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS payment_date DATE DEFAULT CURRENT_DATE;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS months_covered INTEGER DEFAULT 1;
 CREATE INDEX IF NOT EXISTS idx_payments_payment_date ON payments(payment_date);
+
+-- Migration: add active column to customers
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE;
+CREATE INDEX IF NOT EXISTS idx_customers_active ON customers(active);

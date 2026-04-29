@@ -56,7 +56,8 @@ let state = {
   user: null,
   currentPage: 'customers',
   loading: false,
-  filterActive: null
+  filterActive: null,
+  showInactive: false
 };
 
 // ===== Auth =====
@@ -277,7 +278,8 @@ async function loadCustomers() {
       vehicle: c.vehicle || '', spot: c.spot || '',
       monthlyFee: c.monthly_fee || 0, notes: c.notes || '',
       lastPaymentDate: lpd, createdAt: c.created_at, payments,
-      contactZalo: c.contact_zalo || false
+      contactZalo: c.contact_zalo || false,
+      active: c.active !== false
     };
   });
 }
@@ -342,7 +344,8 @@ async function addCustomer(data) {
     lastPaymentDate: result.last_payment_date,
     createdAt: result.created_at,
     payments: [],
-    contactZalo: result.contact_zalo || false
+    contactZalo: result.contact_zalo || false,
+    active: true
   });
   renderAll();
   showToast('✅ Đã thêm khách hàng');
@@ -360,6 +363,7 @@ async function updateCustomer(id, data) {
   if (data.notes !== undefined) updateData.notes = data.notes;
   if (data.lastPaymentDate !== undefined) updateData.last_payment_date = data.lastPaymentDate;
   if (data.contactZalo !== undefined) updateData.contact_zalo = data.contactZalo;
+  if (data.active !== undefined) updateData.active = data.active;
 
   const { error } = await db
     .from('customers')
@@ -372,6 +376,18 @@ async function updateCustomer(id, data) {
   if (idx !== -1) Object.assign(state.customers[idx], data);
   renderAll();
   showToast('✅ Đã cập nhật');
+}
+
+async function deactivateCustomer(id) {
+  await updateCustomer(id, { active: false });
+  closeModal2();
+  showToast('⏸️ Đã đánh dấu tạm nghỉ');
+}
+
+async function reactivateCustomer(id) {
+  await updateCustomer(id, { active: true });
+  closeModal2();
+  showToast('🔄 Đã kích hoạt lại');
 }
 
 async function deleteCustomer(id) {
@@ -517,6 +533,9 @@ function renderCustomers() {
   const query = (document.getElementById('searchInput').value || '').toLowerCase();
   const list = document.getElementById('customerList');
   let customers = state.customers;
+  if (!state.showInactive) {
+    customers = customers.filter(c => c.active !== false);
+  }
   if (query) {
     customers = customers.filter(c =>
       (c.plate || '').toLowerCase().includes(query) ||
@@ -543,12 +562,12 @@ function renderCustomers() {
     const daysNum = getDaysUntilDue(c);
     const dueLabel = !c.lastPaymentDate ? 'Chưa xác định' : daysNum > 0 ? `Còn ${daysNum} ngày` : daysNum === 0 ? 'Hết hạn hôm nay' : `Quá hạn ${Math.abs(daysNum)} ngày`;
     return `
-      <div class="customer-card" onclick="openCustomerDetail('${c.id}')">
-        <div class="name">${escapeHtml(c.name)}</div>
+      <div class="customer-card ${c.active === false ? 'inactive-card' : ''}" onclick="openCustomerDetail('${c.id}')">
+        <div class="name">${escapeHtml(c.name)} ${c.active === false ? '<span class="inactive-badge">Tạm nghỉ</span>' : ''}</div>
         <div class="plate">${escapeHtml(c.plate)}${c.vehicle ? ' · ' + escapeHtml(c.vehicle) : ''}</div>
         <div class="meta">
           ${c.contactZalo ? '<span style="color:#0068FF;">💬 Zalo</span>' : c.phone ? `<a href="tel:${escapeHtml(c.phone)}" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;">📞 ${escapeHtml(c.phone)}</a>` : ''}
-          <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span>
+          ${c.active !== false ? `<span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span>` : '<span class="status-badge status-inactive">Tạm nghỉ</span>'}
         </div>
         <div class="meta">
           <span>📅 Hạn: ${getNextDueDate(c)} (${dueLabel})</span>
@@ -560,8 +579,9 @@ function renderCustomers() {
 }
 
 function renderStats() {
-  let active = 0, dueSoon = 0, overdue = 0;
+  let active = 0, dueSoon = 0, overdue = 0, inactive = 0;
   state.customers.forEach(c => {
+    if (c.active === false) { inactive++; return; }
     const s = getDueStatus(c);
     if (s === 'active') active++;
     else if (s === 'due-soon') dueSoon++;
@@ -570,6 +590,7 @@ function renderStats() {
   document.getElementById('statActive').textContent = active;
   document.getElementById('statDue').textContent = dueSoon;
   document.getElementById('statOverdue').textContent = overdue;
+  document.getElementById('statInactive').textContent = inactive;
 
   const cardActive = document.getElementById('statCardActive');
   const cardDue = document.getElementById('statCardDue');
@@ -581,9 +602,18 @@ function renderStats() {
   else if (state.filterActive === 'due-soon' && cardDue) cardDue.classList.add('filter-active');
   else if (state.filterActive === 'overdue' && cardOverdue) cardOverdue.classList.add('filter-active');
 
+  const toggle = document.getElementById('inactiveToggle');
+  if (toggle) toggle.style.display = state.showInactive && inactive > 0 ? 'block' : 'none';
+
   if (cardActive) cardActive.onclick = () => setStatusFilter('active');
   if (cardDue) cardDue.onclick = () => setStatusFilter('due-soon');
   if (cardOverdue) cardOverdue.onclick = () => setStatusFilter('overdue');
+}
+
+function toggleShowInactive() {
+  state.showInactive = !state.showInactive;
+  renderCustomers();
+  renderStats();
 }
 
 function setStatusFilter(filter) {
@@ -827,6 +857,10 @@ async function openCustomerDetail(id) {
     </div>
     <div class="btn-row" style="margin-top:4px;">
       <button class="btn-secondary" onclick="closeModal2()" style="flex:2;">Đóng</button>
+      ${c.active === false
+        ? `<button class="btn-success" onclick="reactivateCustomer('${c.id}')" style="flex:1;background:#1a73e8;color:white;border:none;border-radius:8px;padding:12px;font-size:15px;font-weight:600;cursor:pointer;">🔄 Kích hoạt lại</button>`
+        : `<button class="btn-secondary" onclick="deactivateCustomer('${c.id}')" style="flex:1;">⏸️ Cho tạm nghỉ</button>`
+      }
       <button class="btn-danger" onclick="confirmDelete('${c.id}')" style="flex:1;">🗑️ Xóa</button>
     </div>
   `;

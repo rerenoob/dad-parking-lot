@@ -168,6 +168,9 @@
     .status-due-soon { background: #fef7e0; color: #e37400; }
     .status-overdue { background: #fce8e6; color: #c5221f; }
     .status-expired { background: #f1f3f4; color: #5f6368; }
+    .status-inactive { background: #e8e8e8; color: #666; }
+    .inactive-card { opacity: 0.6; }
+    .inactive-badge { font-size: 11px; background: #e8e8e8; color: #666; padding: 1px 6px; border-radius: 4px; font-weight: 400; margin-left: 4px; }
 
     /* Bottom nav */
     .bottom-nav {
@@ -379,6 +382,10 @@
             <div class="num" style="color:#c5221f" id="statOverdue">0</div>
             <div class="label">Quá hạn</div>
           </div>
+          <div class="stat-card" id="statCardInactive" style="cursor:pointer;" onclick="toggleShowInactive()">
+            <div class="num" style="color:#5f6368" id="statInactive">0</div>
+            <div class="label">Tạm nghỉ</div>
+          </div>
         </div>
 
         <div class="actions">
@@ -390,6 +397,9 @@
         <div class="search-bar">
           <span>🔍</span>
           <input type="text" id="searchInput" placeholder="Tìm biển số, tên khách..." oninput="renderCustomers()">
+        </div>
+        <div id="inactiveToggle" style="text-align:center;margin-bottom:8px;display:none;">
+          <button onclick="toggleShowInactive()" style="background:#f1f3f4;border:none;padding:6px 16px;border-radius:20px;font-size:13px;cursor:pointer;">🔙 Ẩn khách tạm nghỉ</button>
         </div>
 
         <div id="customerList"></div>
