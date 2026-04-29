@@ -715,7 +715,7 @@ function switchPage(page) {
 function openAddCustomer() {
   const rate = state.settings.monthly_rate || 0;
   const now = new Date();
-  const fpd = now.getDate(), fpm = now.getMonth() + 1, fpy = now.getFullYear();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const content = `
     <h2>➕ Thêm khách hàng</h2>
     <div class="field"><label>Tên khách *</label><input type="text" id="fName" placeholder="VD: Nguyễn Văn A"></div>
@@ -727,18 +727,7 @@ function openAddCustomer() {
     <div class="field"><label>Giá tháng (VNĐ)</label><input type="text" inputmode="numeric" id="fFee" placeholder="VD: 1,000,000"></div>
     <div class="field"><label>Ghi chú</label><textarea id="fNotes" placeholder="VD: Tình trạng xe, thỏa thuận đặc biệt..."></textarea></div>
     <div class="field"><label>Ngày bắt đầu gửi</label>
-      <div style="display:flex;gap:6px;">
-        <select id="fPayDay" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
-          ${Array.from({length:31},(_,i)=>`<option value="${i+1}" ${i+1===fpd?'selected':''}>${i+1}</option>`).join('')}
-        </select>
-        <select id="fPayMonth" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
-          ${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===fpm?'selected':''}>Tháng ${i+1}</option>`).join('')}
-        </select>
-        <select id="fPayYear" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
-          ${Array.from({length:10},(_,i)=>{ const yr=2022+i; return `<option value="${yr}" ${yr===fpy?'selected':''}>${yr}</option>`; }).join('')}
-        </select>
-      </div>
-      <div style="font-size:12px;color:#999;margin-top:4px">Ngày — Tháng — Năm</div>
+      <input type="date" id="fPayDate" value="${todayStr}" style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:8px;font-size:16px;outline:none;">
     </div>
     <div class="btn-row">
       <button class="btn-secondary" onclick="closeModal2()">Hủy</button>
@@ -759,10 +748,8 @@ async function submitAddCustomer() {
     return;
   }
   const fee = getCurrencyValue('fFee') || state.settings.monthly_rate;
-  const fPayDay = document.getElementById('fPayDay').value.padStart(2, '0');
-  const fPayMonth = document.getElementById('fPayMonth').value.padStart(2, '0');
-  const fPayYear = document.getElementById('fPayYear').value;
-  const startDate = localDateToISO(`${fPayYear}-${fPayMonth}-${fPayDay}`);
+  const fPayDateVal = document.getElementById('fPayDate').value;
+  const startDate = fPayDateVal ? localDateToISO(fPayDateVal) : null;
   const ok = await addCustomer({
     name, phone, plate,
     vehicle: document.getElementById('fVehicle').value.trim(),
@@ -774,7 +761,9 @@ async function submitAddCustomer() {
   });
   if (!ok) return;
   const newCustomer = state.customers[0];
-  await recordPayment(newCustomer.id, newCustomer.monthlyFee, 'Tiền mặt', 'Thanh toán đầu tiên', startDate, 1);
+  if (startDate) {
+    await recordPayment(newCustomer.id, newCustomer.monthlyFee, 'Tiền mặt', 'Thanh toán đầu tiên', startDate, 1);
+  }
   openCustomerDetail(newCustomer.id);
 }
 
@@ -823,17 +812,7 @@ async function openCustomerDetail(id) {
       </div>
       <div style="margin-top:6px;">
         <label style="font-size:12px;color:#666;margin-bottom:2px;display:block;">Ngày thanh toán</label>
-        <div style="display:flex;gap:6px;">
-          <select id="payDay" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
-            ${Array.from({length:31},(_,i)=>'<option value="'+(i+1)+'"'+(i+1===parseInt(new Date().toISOString().split('T')[0].split('-')[2])?' selected':'')+'>'+(i+1)+'</option>').join('')}
-          </select>
-          <select id="payMonth" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
-            ${Array.from({length:12},(_,i)=>'<option value="'+(i+1)+'"'+(i+1===parseInt(new Date().toISOString().split('T')[0].split('-')[1])?' selected':'')+'>Tháng '+(i+1)+'</option>').join('')}
-          </select>
-          <select id="payYear" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
-            ${Array.from({length:10},(_,i)=>'<option value="'+(2022+i)+'"'+(2022+i===parseInt(new Date().toISOString().split('T')[0].split('-')[0])?' selected':'')+'>'+(2022+i)+'</option>').join('')}
-          </select>
-        </div>
+        <input type="date" id="payDate" value="${new Date().toISOString().split('T')[0]}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
       </div>
       <div style="margin-top:6px;">
         <label style="font-size:12px;color:#666;margin-bottom:2px;display:block;">Số tháng đóng (1, 2, 3...)</label>
@@ -870,22 +849,27 @@ async function openCustomerDetail(id) {
 }
 
 function confirmDelete(id) {
+  const content = `
+    <h2>🗑️ Xác nhận xóa</h2>
+    <p style="font-size:15px;margin-bottom:20px;color:#555;">Xóa khách hàng này?</p>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="openCustomerDetail('${id}')">Hủy</button>
+      <button class="btn-danger" onclick="deleteCustomerConfirmed('${id}')">Xác nhận</button>
+    </div>
+  `;
+  showModal(content);
+}
+
+async function deleteCustomerConfirmed(id) {
   closeModal2();
-  setTimeout(async () => {
-    if (confirm('Xóa khách hàng này?')) {
-      await deleteCustomer(id);
-    }
-  }, 200);
+  await deleteCustomer(id);
 }
 
 async function submitPayment(customerId) {
   const amount = getCurrencyValue('payAmount');
   const method = document.getElementById('payMethod').value;
   const note = document.getElementById('payNote').value.trim();
-  const payDay = document.getElementById('payDay').value.padStart(2,'0');
-  const payMonth = document.getElementById('payMonth').value.padStart(2,'0');
-  const payYear = document.getElementById('payYear').value;
-  const paymentDate = payYear+'-'+payMonth+'-'+payDay;
+  const paymentDate = document.getElementById('payDate').value || new Date().toISOString().split('T')[0];
   const monthsCovered = parseInt(document.getElementById('payMonths').value) || 1;
   if (!amount || amount <= 0) { showToast('⚠️ Nhập số tiền hợp lệ'); return; }
   const ok = await recordPayment(customerId, amount, method, note, paymentDate, monthsCovered);
@@ -898,28 +882,12 @@ function editPayment(paymentId, customerId) {
   const p = c && c.payments && c.payments.find(p => p.id === paymentId);
   if (!p) return;
 
-  const dateStr = p.payment_date || (p.created_at ? p.created_at.split('T')[0] : '');
-  let pd = 1, pm = 1, py = new Date().getFullYear();
-  if (dateStr) {
-    const parts = dateStr.split('-');
-    py = parseInt(parts[0]) || py;
-    pm = parseInt(parts[1]) || pm;
-    pd = parseInt(parts[2]) || pd;
-  }
-
-  const days = Array.from({length:31},(_,i)=>`<option value="${i+1}" ${i+1===pd?'selected':''}>${i+1}</option>`).join('');
-  const months = Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===pm?'selected':''}>Tháng ${i+1}</option>`).join('');
-  const years = Array.from({length:10},(_,i)=>{ const yr=2022+i; return `<option value="${yr}" ${yr===py?'selected':''}>${yr}</option>`; }).join('');
+  const dateStr = p.payment_date || (p.created_at ? p.created_at.split('T')[0] : new Date().toISOString().split('T')[0]);
 
   const content = `
     <h2>✏️ Sửa giao dịch</h2>
     <div class="field"><label>Ngày thanh toán</label>
-      <div style="display:flex;gap:6px;">
-        <select id="editPayDay" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${days}</select>
-        <select id="editPayMonth" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${months}</select>
-        <select id="editPayYear" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${years}</select>
-      </div>
-      <div style="font-size:12px;color:#999;margin-top:4px">Ngày — Tháng — Năm</div>
+      <input type="date" id="editPayDate" value="${dateStr}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
     </div>
     <div class="field"><label>Số tiền (VNĐ)</label>
       <input type="text" inputmode="numeric" id="editPayAmount" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
@@ -949,10 +917,7 @@ function editPayment(paymentId, customerId) {
 async function submitEditPayment(paymentId, customerId) {
   const amount = getCurrencyValue('editPayAmount');
   if (!amount || amount <= 0) { showToast('⚠️ Nhập số tiền hợp lệ'); return; }
-  const day = document.getElementById('editPayDay').value.padStart(2, '0');
-  const month = document.getElementById('editPayMonth').value.padStart(2, '0');
-  const year = document.getElementById('editPayYear').value;
-  const paymentDate = `${year}-${month}-${day}`;
+  const paymentDate = document.getElementById('editPayDate').value || new Date().toISOString().split('T')[0];
   const method = document.getElementById('editPayMethod').value;
   const monthsCovered = parseInt(document.getElementById('editPayMonths').value) || 1;
   const note = document.getElementById('editPayNote').value.trim();
@@ -1027,13 +992,13 @@ async function recalcLastPaymentDate(customerId) {
 function editCustomer(id) {
   const c = state.customers.find(c => c.id === id);
   if (!c) return;
-  let epd, epm, epy;
+  let ePayDateVal;
   if (c.lastPaymentDate) {
     const dt = new Date(c.lastPaymentDate);
-    epd = dt.getDate(); epm = dt.getMonth() + 1; epy = dt.getFullYear();
+    ePayDateVal = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
   } else {
     const now = new Date();
-    epd = now.getDate(); epm = now.getMonth() + 1; epy = now.getFullYear();
+    ePayDateVal = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   }
   const content = `
     <h2>✏️ Sửa thông tin</h2>
@@ -1045,19 +1010,8 @@ function editCustomer(id) {
     <div class="field"><label>Chỗ đỗ</label><input type="text" id="eSpot" value="${escapeHtml(c.spot)}"></div>
     <div class="field"><label>Giá tháng (VNĐ)</label><input type="text" inputmode="numeric" id="eFee"></div>
     <div class="field"><label>Ghi chú</label><textarea id="eNotes">${escapeHtml(c.notes)}</textarea></div>
-    <div class="field"><label>Ngày bắt đầu gửi</label>
-      <div style="display:flex;gap:6px;">
-        <select id="ePayDay" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
-          ${Array.from({length:31},(_,i)=>`<option value="${i+1}" ${i+1===epd?'selected':''}>${i+1}</option>`).join('')}
-        </select>
-        <select id="ePayMonth" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
-          ${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===epm?'selected':''}>Tháng ${i+1}</option>`).join('')}
-        </select>
-        <select id="ePayYear" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">
-          ${Array.from({length:10},(_,i)=>{ const yr=2022+i; return `<option value="${yr}" ${yr===epy?'selected':''}>${yr}</option>`; }).join('')}
-        </select>
-      </div>
-      <div style="font-size:12px;color:#999;margin-top:4px">Ngày — Tháng — Năm</div>
+    <div class="field"><label>Ngày thanh toán gần nhất</label>
+      <input type="date" id="ePayDate" value="${ePayDateVal}" style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:8px;font-size:16px;outline:none;">
     </div>
     <div class="btn-row">
       <button class="btn-secondary" onclick="openCustomerDetail('${c.id}')">Hủy</button>
@@ -1073,10 +1027,8 @@ function editCustomer(id) {
 async function submitEdit(id) {
   const name = document.getElementById('eName').value.trim();
   if (!name) { showToast('⚠️ Nhập tên khách'); return; }
-  const ePayDay = document.getElementById('ePayDay').value.padStart(2, '0');
-  const ePayMonth = document.getElementById('ePayMonth').value.padStart(2, '0');
-  const ePayYear = document.getElementById('ePayYear').value;
-  const lastPaymentDate = localDateToISO(`${ePayYear}-${ePayMonth}-${ePayDay}`);
+  const ePayDateVal = document.getElementById('ePayDate').value;
+  const lastPaymentDate = ePayDateVal ? localDateToISO(ePayDateVal) : null;
   await updateCustomer(id, {
     name,
     phone: document.getElementById('ePhone').value.trim(),
