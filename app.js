@@ -489,6 +489,13 @@ function getLastPaymentMonths(customer) {
   return payments[payments.length - 1].months_covered || 1;
 }
 
+function getDateFromDropdowns(prefix) {
+  const d = document.getElementById(prefix + 'Day').value;
+  const m = document.getElementById(prefix + 'Month').value;
+  const y = document.getElementById(prefix + 'Year').value;
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
 function localDateToISO(dateStr) {
   if (!dateStr) return new Date().toISOString();
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -715,7 +722,12 @@ function switchPage(page) {
 function openAddCustomer() {
   const rate = state.settings.monthly_rate || 0;
   const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const todayD = now.getDate();
+  const todayM = now.getMonth() + 1;
+  const todayY = now.getFullYear();
+  const dayOpts = Array.from({length:31},(_,i)=>`<option value="${i+1}" ${i+1===todayD?'selected':''}>${i+1}</option>`).join('');
+  const monOpts = Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===todayM?'selected':''}>${i+1}</option>`).join('');
+  const yearOpts = Array.from({length:11},(_,i)=>`<option value="${2020+i}" ${2020+i===todayY?'selected':''}>${2020+i}</option>`).join('');
   const content = `
     <h2>➕ Thêm khách hàng</h2>
     <div class="field"><label>Tên khách *</label><input type="text" id="fName" placeholder="VD: Nguyễn Văn A"></div>
@@ -727,7 +739,13 @@ function openAddCustomer() {
     <div class="field"><label>Giá tháng (VNĐ)</label><input type="text" inputmode="numeric" id="fFee" placeholder="VD: 1,000,000"></div>
     <div class="field"><label>Ghi chú</label><textarea id="fNotes" placeholder="VD: Tình trạng xe, thỏa thuận đặc biệt..."></textarea></div>
     <div class="field"><label>Ngày bắt đầu gửi</label>
-      <input type="date" id="fPayDate" value="${todayStr}" style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:8px;font-size:16px;outline:none;">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <select id="fPayDay" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${dayOpts}</select>
+        <span style="color:#666;">tháng</span>
+        <select id="fPayMonth" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${monOpts}</select>
+        <span style="color:#666;">năm</span>
+        <select id="fPayYear" style="flex:1.2;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${yearOpts}</select>
+      </div>
     </div>
     <div class="btn-row">
       <button class="btn-secondary" onclick="closeModal2()">Hủy</button>
@@ -748,8 +766,7 @@ async function submitAddCustomer() {
     return;
   }
   const fee = getCurrencyValue('fFee') || state.settings.monthly_rate;
-  const fPayDateVal = document.getElementById('fPayDate').value;
-  const startDate = fPayDateVal ? localDateToISO(fPayDateVal) : null;
+  const startDate = localDateToISO(getDateFromDropdowns('fPay'));
   const ok = await addCustomer({
     name, phone, plate,
     vehicle: document.getElementById('fVehicle').value.trim(),
@@ -812,7 +829,13 @@ async function openCustomerDetail(id) {
       </div>
       <div style="margin-top:6px;">
         <label style="font-size:12px;color:#666;margin-bottom:2px;display:block;">Ngày thanh toán</label>
-        <input type="date" id="payDate" value="${new Date().toISOString().split('T')[0]}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+        <div style="display:flex;gap:6px;align-items:center;">
+          <select id="payDay" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${(()=>{const n=new Date();const d=n.getDate();return Array.from({length:31},(_,i)=>`<option value="${i+1}" ${i+1===d?'selected':''}>${i+1}</option>`).join('');})()}</select>
+          <span style="color:#666;">tháng</span>
+          <select id="payMonth" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${(()=>{const n=new Date();const m=n.getMonth()+1;return Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===m?'selected':''}>${i+1}</option>`).join('');})()}</select>
+          <span style="color:#666;">năm</span>
+          <select id="payYear" style="flex:1.2;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${(()=>{const n=new Date();const y=n.getFullYear();return Array.from({length:11},(_,i)=>`<option value="${2020+i}" ${2020+i===y?'selected':''}>${2020+i}</option>`).join('');})()}</select>
+        </div>
       </div>
       <div style="margin-top:6px;">
         <label style="font-size:12px;color:#666;margin-bottom:2px;display:block;">Số tháng đóng (1, 2, 3...)</label>
@@ -869,7 +892,7 @@ async function submitPayment(customerId) {
   const amount = getCurrencyValue('payAmount');
   const method = document.getElementById('payMethod').value;
   const note = document.getElementById('payNote').value.trim();
-  const paymentDate = document.getElementById('payDate').value || new Date().toISOString().split('T')[0];
+  const paymentDate = getDateFromDropdowns('pay');
   const monthsCovered = parseInt(document.getElementById('payMonths').value) || 1;
   if (!amount || amount <= 0) { showToast('⚠️ Nhập số tiền hợp lệ'); return; }
   const ok = await recordPayment(customerId, amount, method, note, paymentDate, monthsCovered);
@@ -883,11 +906,21 @@ function editPayment(paymentId, customerId) {
   if (!p) return;
 
   const dateStr = p.payment_date || (p.created_at ? p.created_at.split('T')[0] : new Date().toISOString().split('T')[0]);
+  const [edY, edM, edD] = dateStr.split('-').map(Number);
+  const edDayOpts = Array.from({length:31},(_,i)=>`<option value="${i+1}" ${i+1===edD?'selected':''}>${i+1}</option>`).join('');
+  const edMonOpts = Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===edM?'selected':''}>${i+1}</option>`).join('');
+  const edYearOpts = Array.from({length:11},(_,i)=>`<option value="${2020+i}" ${2020+i===edY?'selected':''}>${2020+i}</option>`).join('');
 
   const content = `
     <h2>✏️ Sửa giao dịch</h2>
     <div class="field"><label>Ngày thanh toán</label>
-      <input type="date" id="editPayDate" value="${dateStr}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <select id="editPayDay" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${edDayOpts}</select>
+        <span style="color:#666;">tháng</span>
+        <select id="editPayMonth" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${edMonOpts}</select>
+        <span style="color:#666;">năm</span>
+        <select id="editPayYear" style="flex:1.2;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${edYearOpts}</select>
+      </div>
     </div>
     <div class="field"><label>Số tiền (VNĐ)</label>
       <input type="text" inputmode="numeric" id="editPayAmount" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
@@ -917,7 +950,7 @@ function editPayment(paymentId, customerId) {
 async function submitEditPayment(paymentId, customerId) {
   const amount = getCurrencyValue('editPayAmount');
   if (!amount || amount <= 0) { showToast('⚠️ Nhập số tiền hợp lệ'); return; }
-  const paymentDate = document.getElementById('editPayDate').value || new Date().toISOString().split('T')[0];
+  const paymentDate = getDateFromDropdowns('editPay');
   const method = document.getElementById('editPayMethod').value;
   const monthsCovered = parseInt(document.getElementById('editPayMonths').value) || 1;
   const note = document.getElementById('editPayNote').value.trim();
