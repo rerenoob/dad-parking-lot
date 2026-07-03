@@ -503,8 +503,8 @@ function localDateToISO(dateStr) {
 }
 
 function formatCurrency(amount) {
-  if (!amount) return '0₫';
-  return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '₫';
+  if (!amount) return '0 ₫';
+  return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' ₫';
 }
 
 function formatDate(dateStr) {
@@ -513,6 +513,22 @@ function formatDate(dateStr) {
   const day = String(d.getDate()).padStart(2, '0');
   const mon = String(d.getMonth() + 1).padStart(2, '0');
   return `${day}/${mon}/${d.getFullYear()}`;
+}
+
+// Parse YYYY-MM-DD without UTC shift (avoids off-by-one in local timezones)
+function parseDateNoTz(dateStr) {
+  if (!dateStr) return null;
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return null;
+  return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+}
+
+// Format YYYY-MM-DD string directly as DD/MM/YYYY without constructing a Date
+function formatDateStr(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  return parts[2] + '/' + parts[1] + '/' + parts[0];
 }
 
 function getNextDueDate(customer) {
@@ -1192,8 +1208,8 @@ function showReportsModal() {
   const content = `
     <h2>📊 Báo cáo doanh thu</h2>
     <div style="display:flex;gap:4px;margin-bottom:14px;background:#f1f3f4;border-radius:10px;padding:4px;">
-      <button id="reportTabMonthly" class="btn-primary" onclick="switchReportTab('monthly')" style="flex:1;padding:10px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:#1a73e8;color:white;">Theo tháng</button>
-      <button id="reportTabRange" class="btn-secondary" onclick="switchReportTab('range')" style="flex:1;padding:10px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:transparent;color:#555;">Theo khoảng ngày</button>
+      <button id="reportTabMonthly" onclick="switchReportTab('monthly')" style="flex:1;padding:10px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:#1a73e8;color:white;box-shadow:0 1px 3px rgba(0,0,0,0.2);">Theo tháng</button>
+      <button id="reportTabRange" onclick="switchReportTab('range')" style="flex:1;padding:10px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:#e8eaed;color:#555;">Theo khoảng ngày</button>
     </div>
 
     <!-- Monthly view -->
@@ -1208,16 +1224,18 @@ function showReportsModal() {
 
     <!-- Date range view -->
     <div id="reportRangeView" style="display:none;">
-      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap;">
-        <div style="flex:1;min-width:100px;">
-          <label style="font-size:12px;color:#666;display:block;margin-bottom:2px;">Từ ngày</label>
-          <input type="date" id="rangeStart" value="${monthStart}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <div style="flex:1;">
+            <label style="font-size:12px;color:#666;display:block;margin-bottom:2px;">Từ ngày</label>
+            <input type="date" id="rangeStart" value="${monthStart}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:12px;color:#666;display:block;margin-bottom:2px;">Đến ngày</label>
+            <input type="date" id="rangeEnd" value="${todayStr}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+          </div>
         </div>
-        <div style="flex:1;min-width:100px;">
-          <label style="font-size:12px;color:#666;display:block;margin-bottom:2px;">Đến ngày</label>
-          <input type="date" id="rangeEnd" value="${todayStr}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
-        </div>
-        <button class="btn-primary" onclick="renderRangeReportBody()" style="padding:10px 14px;border:none;font-size:14px;font-weight:600;cursor:pointer;border-radius:8px;white-space:nowrap;margin-top:12px;">Xem báo cáo</button>
+        <button onclick="renderRangeReportBody()" style="width:100%;padding:11px 14px;border:none;font-size:14px;font-weight:600;cursor:pointer;border-radius:8px;background:#1a73e8;color:white;">Xem báo cáo</button>
       </div>
       <div id="rangeReportBody"></div>
     </div>
@@ -1244,16 +1262,20 @@ function switchReportTab(tab) {
     rangeView.style.display = 'none';
     tabMonthly.style.background = '#1a73e8';
     tabMonthly.style.color = 'white';
-    tabRange.style.background = 'transparent';
+    tabMonthly.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+    tabRange.style.background = '#e8eaed';
     tabRange.style.color = '#555';
+    tabRange.style.boxShadow = 'none';
     renderReportBody();
   } else {
     monthlyView.style.display = 'none';
     rangeView.style.display = '';
-    tabMonthly.style.background = 'transparent';
+    tabMonthly.style.background = '#e8eaed';
     tabMonthly.style.color = '#555';
+    tabMonthly.style.boxShadow = 'none';
     tabRange.style.background = '#1a73e8';
     tabRange.style.color = 'white';
+    tabRange.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
     renderRangeReportBody();
   }
 }
@@ -1376,15 +1398,15 @@ function renderRangeReportBody() {
     return;
   }
 
-  const startDate = new Date(startRaw + 'T00:00:00');
-  const endDate = new Date(endRaw + 'T23:59:59');
+  const startDate = parseDateNoTz(startRaw);
+  const endDate = parseDateNoTz(endRaw);
 
-  // Collect payments in range
+  // Collect payments in range (compare by YYYY-MM-DD key to avoid tz issues)
   const rangePayments = [];
   state.customers.forEach(c => {
     (c.payments || []).forEach(p => {
-      const pd = new Date(p.payment_date || p.created_at);
-      if (pd >= startDate && pd <= endDate) {
+      const pdKey = (p.payment_date || p.created_at || '').split('T')[0];
+      if (pdKey >= startRaw && pdKey <= endRaw) {
         rangePayments.push({
           ...p,
           customerName: c.name,
@@ -1394,6 +1416,11 @@ function renderRangeReportBody() {
       }
     });
   });
+
+  if (rangePayments.length === 0) {
+    bodyEl.innerHTML = '<div style="text-align:center;padding:36px 20px;color:#999;"><div style="font-size:40px;margin-bottom:12px;">📅</div><p style="margin:0;font-size:14px;">Không có giao dịch trong khoảng này</p></div>';
+    return;
+  }
 
   const totalRevenue = rangePayments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const uniquePayingIds = new Set(rangePayments.map(p => p.customerId));
@@ -1408,53 +1435,61 @@ function renderRangeReportBody() {
   });
   const sortedDates = Object.keys(byDate).sort((a, b) => a.localeCompare(b));
 
-  const dailyRows = sortedDates.map(date => {
+  const dailyRows = sortedDates.map((date, idx) => {
     const dayPayments = byDate[date];
     const dayTotal = dayPayments.reduce((s, p) => s + (p.amount || 0), 0);
     const dayDetails = dayPayments.map(p =>
-      `<div style="font-size:13px;display:flex;justify-content:space-between;padding:2px 0;">
+      `<div style="font-size:13px;display:flex;justify-content:space-between;padding:4px 0;">
         <span>${escapeHtml(p.customerName)} — ${escapeHtml(p.customerPlate)}</span>
         <span style="color:#1e7e34;">${formatCurrency(p.amount)}</span>
       </div>`
     ).join('');
+    const rowId = `dayRow_${idx}`;
+    const detailId = `dayDetail_${idx}`;
     return `
       <div style="margin-bottom:4px;">
-        <div class="history-item" style="cursor:default;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' || !this.nextElementSibling.style.display ? 'block' : 'none'">
-          <div>
-            <strong>${formatDate(date)}</strong>
-            <span style="font-size:12px;color:#999;margin-left:6px;">(${dayPayments.length} giao dịch)</span>
+        <div id="${rowId}" class="history-item" style="cursor:pointer;" onclick="(function(){var d=document.getElementById('${detailId}');var c=document.getElementById('${rowId}_chev');var open=d.style.display==='block';d.style.display=open?'none':'block';c.style.transform=open?'rotate(0deg)':'rotate(90deg)';})()">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="${rowId}_chev" style="font-size:10px;color:#aaa;display:inline-block;transition:transform 0.2s;">▶</span>
+            <div>
+              <strong>${formatDateStr(date)}</strong>
+              <span style="font-size:12px;color:#999;margin-left:6px;">(${dayPayments.length} giao dịch)</span>
+            </div>
           </div>
           <span class="amount">${formatCurrency(dayTotal)}</span>
         </div>
-        <div style="display:none;background:#f9f9f9;border-radius:8px;padding:8px 14px;margin-bottom:4px;">
+        <div id="${detailId}" style="display:none;background:#f6f8ff;border-left:3px solid #1a73e8;border-radius:0 0 8px 0;padding:8px 14px;margin-bottom:4px;">
           ${dayDetails}
         </div>
       </div>`;
   }).join('');
 
-  const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+  // daysDiff: inclusive count from startRaw to endRaw
+  const startD = parseDateNoTz(startRaw);
+  const endD = parseDateNoTz(endRaw);
+  const daysDiff = Math.round((endD - startD) / (1000 * 60 * 60 * 24)) + 1;
 
   bodyEl.innerHTML = `
     <div style="background:#f9f9f9;border-radius:10px;padding:14px;margin-bottom:14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
-        <span style="font-size:14px;color:#555;">📅 Khoảng thời gian</span>
-        <span style="font-size:15px;font-weight:600;">${formatDate(startRaw)} → ${formatDate(endRaw)} (${daysDiff} ngày)</span>
+        <span style="font-size:14px;color:#555;white-space:nowrap;">📅 Khoảng thời gian</span>
+        <span style="font-size:15px;font-weight:600;text-align:right;">${formatDateStr(startRaw)} → ${formatDateStr(endRaw)} (${daysDiff} ngày)</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
-        <span style="font-size:14px;color:#555;">💰 Tổng doanh thu</span>
+        <span style="font-size:14px;color:#555;white-space:nowrap;">💰 Tổng doanh thu</span>
         <span style="font-size:20px;font-weight:700;color:#1e7e34;">${formatCurrency(totalRevenue)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
-        <span style="font-size:14px;color:#555;">📊 Số giao dịch</span>
+        <span style="font-size:14px;color:#555;white-space:nowrap;">📊 Số giao dịch</span>
         <span style="font-size:17px;font-weight:700;">${transactionCount}</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
-        <span style="font-size:14px;color:#555;">👥 Khách hàng đã đóng</span>
+        <span style="font-size:14px;color:#555;white-space:nowrap;">👥 Khách hàng đã đóng</span>
         <span style="font-size:17px;font-weight:700;color:#1a73e8;">${uniquePayingIds.size}</span>
       </div>
     </div>
-    <div style="font-size:14px;font-weight:600;margin-bottom:8px;">📋 Chi tiết theo ngày (bấm vào ngày để xem)</div>
-    ${dailyRows.length > 0 ? dailyRows : '<div style="color:#999;text-align:center;padding:20px;">Không có giao dịch trong khoảng thời gian này</div>'}
+    <div style="font-size:14px;font-weight:600;margin-bottom:8px;">📋 Chi tiết theo ngày</div>
+    ${dailyRows}
   `;
 }
 
