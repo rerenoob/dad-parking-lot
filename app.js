@@ -1171,10 +1171,14 @@ function showDueSoon() {
 }
 
 // ===== Reports =====
+let _reportTab = 'monthly'; // 'monthly' | 'range'
+
 function showReportsModal() {
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
+  const todayStr = now.toISOString().split('T')[0];
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
   const monthOptions = Array.from({length: 12}, (_, i) =>
     `<option value="${i+1}"${i+1 === currentMonth ? ' selected' : ''}>Tháng ${i+1}</option>`
@@ -1187,18 +1191,71 @@ function showReportsModal() {
 
   const content = `
     <h2>📊 Báo cáo doanh thu</h2>
-    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap;">
-      <select id="reportMonth" style="flex:1;min-width:90px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${monthOptions}</select>
-      <select id="reportYear" style="flex:1;min-width:80px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${yearOptions}</select>
-      <button class="btn-primary" onclick="renderReportBody()" style="padding:10px 14px;border:none;font-size:14px;font-weight:600;cursor:pointer;border-radius:8px;white-space:nowrap;">Xem báo cáo</button>
+    <div style="display:flex;gap:4px;margin-bottom:14px;background:#f1f3f4;border-radius:10px;padding:4px;">
+      <button id="reportTabMonthly" class="btn-primary" onclick="switchReportTab('monthly')" style="flex:1;padding:10px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:#1a73e8;color:white;">Theo tháng</button>
+      <button id="reportTabRange" class="btn-secondary" onclick="switchReportTab('range')" style="flex:1;padding:10px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:transparent;color:#555;">Theo khoảng ngày</button>
     </div>
-    <div id="reportBody"></div>
+
+    <!-- Monthly view -->
+    <div id="reportMonthlyView">
+      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap;">
+        <select id="reportMonth" style="flex:1;min-width:90px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${monthOptions}</select>
+        <select id="reportYear" style="flex:1;min-width:80px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:white;">${yearOptions}</select>
+        <button class="btn-primary" onclick="renderReportBody()" style="padding:10px 14px;border:none;font-size:14px;font-weight:600;cursor:pointer;border-radius:8px;white-space:nowrap;">Xem báo cáo</button>
+      </div>
+      <div id="reportBody"></div>
+    </div>
+
+    <!-- Date range view -->
+    <div id="reportRangeView" style="display:none;">
+      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap;">
+        <div style="flex:1;min-width:100px;">
+          <label style="font-size:12px;color:#666;display:block;margin-bottom:2px;">Từ ngày</label>
+          <input type="date" id="rangeStart" value="${monthStart}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+        </div>
+        <div style="flex:1;min-width:100px;">
+          <label style="font-size:12px;color:#666;display:block;margin-bottom:2px;">Đến ngày</label>
+          <input type="date" id="rangeEnd" value="${todayStr}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+        </div>
+        <button class="btn-primary" onclick="renderRangeReportBody()" style="padding:10px 14px;border:none;font-size:14px;font-weight:600;cursor:pointer;border-radius:8px;white-space:nowrap;margin-top:12px;">Xem báo cáo</button>
+      </div>
+      <div id="rangeReportBody"></div>
+    </div>
+
     <div class="btn-row">
       <button class="btn-secondary" onclick="closeModal2()">Đóng</button>
     </div>
   `;
   showModal(content);
+  _reportTab = 'monthly';
   renderReportBody();
+}
+
+function switchReportTab(tab) {
+  _reportTab = tab;
+  const monthlyView = document.getElementById('reportMonthlyView');
+  const rangeView = document.getElementById('reportRangeView');
+  const tabMonthly = document.getElementById('reportTabMonthly');
+  const tabRange = document.getElementById('reportTabRange');
+  if (!monthlyView || !rangeView || !tabMonthly || !tabRange) return;
+
+  if (tab === 'monthly') {
+    monthlyView.style.display = '';
+    rangeView.style.display = 'none';
+    tabMonthly.style.background = '#1a73e8';
+    tabMonthly.style.color = 'white';
+    tabRange.style.background = 'transparent';
+    tabRange.style.color = '#555';
+    renderReportBody();
+  } else {
+    monthlyView.style.display = 'none';
+    rangeView.style.display = '';
+    tabMonthly.style.background = 'transparent';
+    tabMonthly.style.color = '#555';
+    tabRange.style.background = '#1a73e8';
+    tabRange.style.color = 'white';
+    renderRangeReportBody();
+  }
 }
 
 function renderReportBody() {
@@ -1299,6 +1356,105 @@ function renderReportBody() {
         <tbody>${tableRows}</tbody>
       </table>
     </div>
+  `;
+}
+
+function renderRangeReportBody() {
+  const bodyEl = document.getElementById('rangeReportBody');
+  const startEl = document.getElementById('rangeStart');
+  const endEl = document.getElementById('rangeEnd');
+  if (!bodyEl || !startEl || !endEl) return;
+
+  const startRaw = startEl.value;
+  const endRaw = endEl.value;
+  if (!startRaw || !endRaw) {
+    bodyEl.innerHTML = '<div style="color:#999;text-align:center;padding:20px;">Vui lòng chọn ngày bắt đầu và kết thúc</div>';
+    return;
+  }
+  if (startRaw > endRaw) {
+    bodyEl.innerHTML = '<div style="color:#c5221f;text-align:center;padding:20px;">⚠️ Ngày bắt đầu không được sau ngày kết thúc</div>';
+    return;
+  }
+
+  const startDate = new Date(startRaw + 'T00:00:00');
+  const endDate = new Date(endRaw + 'T23:59:59');
+
+  // Collect payments in range
+  const rangePayments = [];
+  state.customers.forEach(c => {
+    (c.payments || []).forEach(p => {
+      const pd = new Date(p.payment_date || p.created_at);
+      if (pd >= startDate && pd <= endDate) {
+        rangePayments.push({
+          ...p,
+          customerName: c.name,
+          customerPlate: c.plate,
+          customerId: c.id
+        });
+      }
+    });
+  });
+
+  const totalRevenue = rangePayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const uniquePayingIds = new Set(rangePayments.map(p => p.customerId));
+  const transactionCount = rangePayments.length;
+
+  // Group by date for daily breakdown
+  const byDate = {};
+  rangePayments.forEach(p => {
+    const key = (p.payment_date || p.created_at || '').split('T')[0];
+    if (!byDate[key]) byDate[key] = [];
+    byDate[key].push(p);
+  });
+  const sortedDates = Object.keys(byDate).sort((a, b) => a.localeCompare(b));
+
+  const dailyRows = sortedDates.map(date => {
+    const dayPayments = byDate[date];
+    const dayTotal = dayPayments.reduce((s, p) => s + (p.amount || 0), 0);
+    const dayDetails = dayPayments.map(p =>
+      `<div style="font-size:13px;display:flex;justify-content:space-between;padding:2px 0;">
+        <span>${escapeHtml(p.customerName)} — ${escapeHtml(p.customerPlate)}</span>
+        <span style="color:#1e7e34;">${formatCurrency(p.amount)}</span>
+      </div>`
+    ).join('');
+    return `
+      <div style="margin-bottom:4px;">
+        <div class="history-item" style="cursor:default;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' || !this.nextElementSibling.style.display ? 'block' : 'none'">
+          <div>
+            <strong>${formatDate(date)}</strong>
+            <span style="font-size:12px;color:#999;margin-left:6px;">(${dayPayments.length} giao dịch)</span>
+          </div>
+          <span class="amount">${formatCurrency(dayTotal)}</span>
+        </div>
+        <div style="display:none;background:#f9f9f9;border-radius:8px;padding:8px 14px;margin-bottom:4px;">
+          ${dayDetails}
+        </div>
+      </div>`;
+  }).join('');
+
+  const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+
+  bodyEl.innerHTML = `
+    <div style="background:#f9f9f9;border-radius:10px;padding:14px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
+        <span style="font-size:14px;color:#555;">📅 Khoảng thời gian</span>
+        <span style="font-size:15px;font-weight:600;">${formatDate(startRaw)} → ${formatDate(endRaw)} (${daysDiff} ngày)</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
+        <span style="font-size:14px;color:#555;">💰 Tổng doanh thu</span>
+        <span style="font-size:20px;font-weight:700;color:#1e7e34;">${formatCurrency(totalRevenue)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
+        <span style="font-size:14px;color:#555;">📊 Số giao dịch</span>
+        <span style="font-size:17px;font-weight:700;">${transactionCount}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
+        <span style="font-size:14px;color:#555;">👥 Khách hàng đã đóng</span>
+        <span style="font-size:17px;font-weight:700;color:#1a73e8;">${uniquePayingIds.size}</span>
+      </div>
+    </div>
+    <div style="font-size:14px;font-weight:600;margin-bottom:8px;">📋 Chi tiết theo ngày (bấm vào ngày để xem)</div>
+    ${dailyRows.length > 0 ? dailyRows : '<div style="color:#999;text-align:center;padding:20px;">Không có giao dịch trong khoảng thời gian này</div>'}
   `;
 }
 
