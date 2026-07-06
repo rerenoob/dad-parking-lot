@@ -1289,6 +1289,11 @@ function renderReportBody() {
   const month = parseInt(monthEl.value);
   const year = parseInt(yearEl.value);
 
+  // Estimated monthly revenue = sum of active customers' monthlyFee
+  const estimatedRevenue = state.customers
+    .filter(c => c.active !== false)
+    .reduce((sum, c) => sum + (c.monthlyFee || 0), 0);
+
   let revenue = 0;
   const payingCustomerIds = new Set();
 
@@ -1302,7 +1307,7 @@ function renderReportBody() {
     });
   });
 
-  const totalCustomers = state.customers.length;
+  const totalCustomers = state.customers.filter(c => c.active !== false).length;
   const paidCount = payingCustomerIds.size;
   const paidRate = totalCustomers > 0 ? ((paidCount / totalCustomers) * 100).toFixed(1) : '0.0';
   const rateColor = parseFloat(paidRate) >= 80 ? '#1e7e34' : parseFloat(paidRate) >= 50 ? '#e37400' : '#c5221f';
@@ -1357,11 +1362,15 @@ function renderReportBody() {
         <span style="font-size:17px;font-weight:700;color:#1e7e34;">${formatCurrency(revenue)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
+        <span style="font-size:14px;color:#555;">📊 Doanh thu dự kiến/tháng</span>
+        <span style="font-size:17px;font-weight:700;color:#1a73e8;">${formatCurrency(estimatedRevenue)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
         <span style="font-size:14px;color:#555;">✅ Tổng số khách hàng đã đóng</span>
         <span style="font-size:17px;font-weight:700;color:#1a73e8;">${paidCount}</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
-        <span style="font-size:14px;color:#555;">👥 Tổng số khách hàng</span>
+        <span style="font-size:14px;color:#555;">👥 Khách đang gửi</span>
         <span style="font-size:17px;font-weight:700;">${totalCustomers}</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
@@ -1422,6 +1431,9 @@ function renderRangeReportBody() {
     return;
   }
 
+  const estimatedRevenue = state.customers
+    .filter(c => c.active !== false)
+    .reduce((sum, c) => sum + (c.monthlyFee || 0), 0);
   const totalRevenue = rangePayments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const uniquePayingIds = new Set(rangePayments.map(p => p.customerId));
   const transactionCount = rangePayments.length;
@@ -1478,6 +1490,10 @@ function renderRangeReportBody() {
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
         <span style="font-size:14px;color:#555;white-space:nowrap;">💰 Tổng doanh thu</span>
         <span style="font-size:20px;font-weight:700;color:#1e7e34;">${formatCurrency(totalRevenue)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
+        <span style="font-size:14px;color:#555;white-space:nowrap;">📊 Doanh thu dự kiến/tháng</span>
+        <span style="font-size:17px;font-weight:700;color:#1a73e8;">${formatCurrency(estimatedRevenue)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
         <span style="font-size:14px;color:#555;white-space:nowrap;">📊 Số giao dịch</span>
