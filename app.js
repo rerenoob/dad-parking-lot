@@ -277,7 +277,7 @@ async function loadCustomers() {
       id: c.id, name: c.name, phone: c.phone || '', plate: c.plate,
       vehicle: c.vehicle || '', spot: c.spot || '',
       monthlyFee: c.monthly_fee || 0, notes: c.notes || '',
-      lastPaymentDate: lpd, createdAt: c.created_at, payments,
+      lastPaymentDate: lpd, billingDay: c.billing_day || null, createdAt: c.created_at, payments,
       contactZalo: c.contact_zalo || false,
       active: c.active !== false
     };
@@ -326,6 +326,7 @@ async function addCustomer(data) {
       monthly_fee: data.monthlyFee || state.settings.monthly_rate,
       notes: data.notes || '',
       last_payment_date: data.lastPaymentDate || null,
+      billing_day: data.billingDay || null,
       contact_zalo: data.contactZalo || false
     })
     .select()
@@ -342,6 +343,7 @@ async function addCustomer(data) {
     monthlyFee: result.monthly_fee || 0,
     notes: result.notes || '',
     lastPaymentDate: result.last_payment_date,
+    billingDay: result.billing_day || null,
     createdAt: result.created_at,
     payments: [],
     contactZalo: result.contact_zalo || false,
@@ -363,6 +365,7 @@ async function updateCustomer(id, data) {
   if (data.notes !== undefined) updateData.notes = data.notes;
   if (data.lastPaymentDate !== undefined) updateData.last_payment_date = data.lastPaymentDate;
   if (data.contactZalo !== undefined) updateData.contact_zalo = data.contactZalo;
+  if (data.billingDay !== undefined) updateData.billing_day = data.billingDay;
   if (data.active !== undefined) updateData.active = data.active;
 
   const { error } = await db
@@ -420,17 +423,8 @@ async function recordPayment(customerId, amount, method, note, paymentDate, mont
     .single();
   if (payError) { showToast('⚠️ Lỗi: ' + payError.message); return false; }
 
-  const lastPayDate = localDateToISO(payDate);
-  const { error: updError } = await db
-    .from('customers')
-    .update({ last_payment_date: lastPayDate })
-    .eq('id', customerId)
-    .eq('user_id', state.user.id);
-  if (updError) { showToast('⚠️ Lỗi: ' + updError.message); return false; }
-
   const c = state.customers.find(c => c.id === customerId);
   if (c) {
-    c.lastPaymentDate = lastPayDate;
     if (!c.payments) c.payments = [];
     c.payments.push({
       id: payment.id,
@@ -444,18 +438,78 @@ async function recordPayment(customerId, amount, method, note, paymentDate, mont
     });
     c.payments.sort((a, b) => new Date(a.payment_date || a.created_at) - new Date(b.payment_date || b.created_at));
   }
+  await recalcLastPaymentDate(customerId);
   renderAll();
   showToast('💰 Đã ghi nhận thanh toán');
   return true;
 }
 
+// Fixed billing-day anchor (day-of-month of first payment). Immutable — never overwritten.
+const GRACE_DAYS = 5;   // lenient; hardcoded
+const LATE_WINDOW = 6;  // periods considered for the repeat badge
+
+function getBillingDay(customer) {
+  if (customer.billingDay) return customer.billingDay;
+  const pays = customer.payments || [];
+  const first = pays[0];
+  if (first) { const d = parseDateNoTz(first.payment_date); if (d) return d.getDate(); }
+  if (customer.lastPaymentDate) { const d = new Date(customer.lastPaymentDate); if (!isNaN(d.getTime())) return d.getDate(); }
+  return 1;
+}
+
+function getPeriodsCovered(customer) {
+  return (customer.payments || []).reduce((n, p) => n + (p.months_covered || 1), 0);
+}
+
+// Due date of the k-th billing period after the first payment (0-indexed).
+// Target month is computed first, then the billing day is clamped to THAT month's length
+// (so a day-31 anchor doesn't get permanently downgraded just because the base month was short).
+function getDueDateForPeriod(customer, k) {
+  const pays = customer.payments || [];
+  const first = pays[0];
+  if (!first) return null;
+  const base = parseDateNoTz(first.payment_date);
+  if (!base) return null;
+  const target = new Date(base.getFullYear(), base.getMonth() + k, 1);
+  const maxDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(getBillingDay(customer), maxDay));
+  return target;
+}
+
+// THE key function: due date of the first period NOT yet covered by payments.
+// Falls back to the old rolling (lastPaymentDate + 1 month) calc for customers with no
+// payment rows yet (e.g. a manually-edited lastPaymentDate before any recordPayment call).
+function getNextDueDateObj(customer) {
+  const pays = customer.payments || [];
+  if (pays.length === 0) {
+    if (!customer.lastPaymentDate) return null;
+    const last = new Date(customer.lastPaymentDate);
+    return isNaN(last.getTime()) ? null : addMonths(last, 1);
+  }
+  return getDueDateForPeriod(customer, getPeriodsCovered(customer));
+}
+
+// Repeat-offender count: how many of the last LATE_WINDOW periods were settled > GRACE_DAYS late.
+function getLateCount(customer) {
+  if (customer.active === false) return 0; // Tạm nghỉ excluded
+  const pays = customer.payments || [];
+  if (pays.length === 0) return 0;
+  let covered = 0;
+  const lateness = [];
+  for (const p of pays) {
+    const paidOn = parseDateNoTz(p.payment_date);
+    for (let i = 0; i < (p.months_covered || 1); i++) {
+      const due = getDueDateForPeriod(customer, covered++);
+      if (due) lateness.push(Math.round((paidOn - due) / 86400000));
+    }
+  }
+  return lateness.slice(-LATE_WINDOW).filter(d => d > GRACE_DAYS).length;
+}
+
 // ===== Computed =====
 function getDueStatus(customer) {
-  if (!customer.lastPaymentDate) return 'no-data';
-  const last = new Date(customer.lastPaymentDate);
-  const next = addMonths(last, getLastPaymentMonths(customer));
-  const now = new Date();
-  const daysUntilDue = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
+  if (!customer.lastPaymentDate && !(customer.payments && customer.payments.length > 0)) return 'no-data';
+  const daysUntilDue = getDaysUntilDue(customer);
   if (daysUntilDue > state.settings.reminder_days) return 'active';
   if (daysUntilDue > 0) return 'due-soon';
   if (daysUntilDue > -30) return 'overdue';
@@ -475,18 +529,12 @@ function getStatusBadgeClass(status) {
 function addMonths(date, months) {
   const d = new Date(date);
   const day = d.getDate();
-  const m = months || 1;
+  const m = (months === undefined || months === null) ? 1 : months;
   d.setDate(1);
   d.setMonth(d.getMonth() + m);
   const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   d.setDate(Math.min(day, maxDay));
   return d;
-}
-
-function getLastPaymentMonths(customer) {
-  const payments = customer.payments;
-  if (!payments || payments.length === 0) return 1;
-  return payments[payments.length - 1].months_covered || 1;
 }
 
 function getDateFromDropdowns(prefix) {
@@ -532,16 +580,19 @@ function formatDateStr(dateStr) {
 }
 
 function getNextDueDate(customer) {
-  if (!customer.lastPaymentDate) return 'Chưa xác định';
-  return formatDate(addMonths(new Date(customer.lastPaymentDate), getLastPaymentMonths(customer)).toISOString());
+  const next = getNextDueDateObj(customer);
+  if (!next) return 'Chưa xác định';
+  return formatDate(next.toISOString());
 }
 
 function getDaysUntilDue(customer) {
-  if (!customer.lastPaymentDate) return 0;
-  const last = new Date(customer.lastPaymentDate);
-  const next = addMonths(last, getLastPaymentMonths(customer));
+  const next = getNextDueDateObj(customer);
+  if (!next) return 0;
   const now = new Date();
-  return Math.ceil((next - now) / (1000 * 60 * 60 * 24));
+  // floor both sides to local midnight to avoid time-of-day rollover
+  const a = new Date(next.getFullYear(), next.getMonth(), next.getDate());
+  const b = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((a - b) / (1000 * 60 * 60 * 24));
 }
 
 // ===== Rendering =====
@@ -591,6 +642,7 @@ function renderCustomers() {
         <div class="meta">
           ${c.contactZalo ? '<span style="color:#0068FF;">💬 Zalo</span>' : c.phone ? `<a href="tel:${escapeHtml(c.phone)}" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;">📞 ${escapeHtml(c.phone)}</a>` : ''}
           ${c.active !== false ? `<span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span>` : '<span class="status-badge status-inactive">Tạm nghỉ</span>'}
+          ${getLateCount(c) >= 2 ? `<span class="status-badge status-overdue">⚠️ Chậm ${getLateCount(c)}/${LATE_WINDOW} kỳ</span>` : ''}
         </div>
         <div class="meta">
           <span>📅 Hạn: ${getNextDueDate(c)} (${dueLabel})</span>
@@ -822,7 +874,7 @@ async function openCustomerDetail(id) {
   const dueLabel = !c.lastPaymentDate ? 'chưa xác định' : daysNum > 0 ? `còn ${daysNum} ngày` : daysNum === 0 ? 'hết hạn hôm nay' : `quá hạn ${Math.abs(daysNum)} ngày`;
 
   const content = `
-    <h2>${escapeHtml(c.name)} <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span></h2>
+    <h2>${escapeHtml(c.name)} <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span>${getLateCount(c) >= 2 ? `<span class="status-badge status-overdue">⚠️ Chậm ${getLateCount(c)}/${LATE_WINDOW} kỳ</span>` : ''}</h2>
     <div style="margin-bottom:12px;">
       <div class="field" style="display:flex;justify-content:space-between;margin-bottom:4px;">
         <span style="font-size:14px;"><strong>🪪 Biển số:</strong> ${escapeHtml(c.plate)}</span>
