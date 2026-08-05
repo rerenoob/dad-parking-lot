@@ -595,6 +595,31 @@ function getDaysUntilDue(customer) {
   return Math.round((a - b) / (1000 * 60 * 60 * 24));
 }
 
+// A customer is "paid up enough" to suppress the red Quá hạn/Hết hạn pill when their
+// most recent payment chain covers the current period (within the grace window or
+// beyond). Only show the red pill if the next uncovered due date is more than
+// GRACE_DAYS in the past — i.e. truly CURRENTLY delinquent.
+function shouldShowOverduePill(customer) {
+  const next = getNextDueDateObj(customer);
+  if (!next) return false;
+  const now = new Date();
+  const a = new Date(next.getFullYear(), next.getMonth(), next.getDate());
+  const b = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const daysUntil = Math.round((a - b) / 86400000);
+  return daysUntil <= -GRACE_DAYS;
+}
+
+// Render-status for the pill: downgrade overdue/expired to a neutral 'active' pill
+// when the customer is paid up enough, so the red Quá hạn/Hết hạn doesn't show.
+// getDueStatus() itself is left unchanged (filtering/stats still use it).
+function getPillStatus(customer) {
+  const status = getDueStatus(customer);
+  if ((status === 'overdue' || status === 'expired') && !shouldShowOverduePill(customer)) {
+    return 'active';
+  }
+  return status;
+}
+
 // ===== Rendering =====
 function renderAll() {
   renderCustomers();
@@ -632,7 +657,7 @@ function renderCustomers() {
     return;
   }
   list.innerHTML = customers.map(c => {
-    const status = getDueStatus(c);
+    const status = getPillStatus(c);
     const daysNum = getDaysUntilDue(c);
     const dueLabel = !c.lastPaymentDate ? 'Chưa xác định' : daysNum > 0 ? `Còn ${daysNum} ngày` : daysNum === 0 ? 'Hết hạn hôm nay' : `Quá hạn ${Math.abs(daysNum)} ngày`;
     return `
@@ -855,7 +880,7 @@ async function submitAddCustomer() {
 async function openCustomerDetail(id) {
   const c = state.customers.find(c => c.id === id);
   if (!c) return;
-  const status = getDueStatus(c);
+  const status = getPillStatus(c);
   const payments = (c.payments || []).slice().reverse().map(p => `
     <tr>
       <td>${formatDate(p.payment_date || p.created_at || p.date)}</td>
