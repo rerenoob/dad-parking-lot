@@ -595,21 +595,20 @@ function getDaysUntilDue(customer) {
   return Math.round((a - b) / (1000 * 60 * 60 * 24));
 }
 
-// Show the red Quá hạn/Hết hạn pill only once the first uncovered due date is MORE than
-// GRACE_DAYS in the past — i.e. the customer is currently delinquent. Inside the grace
-// window (due today .. GRACE_DAYS days late) the period still counts as settled on time,
-// the same rule getLateCount() uses (late === days > GRACE_DAYS).
+// Show the red Quá hạn/Hết hạn pill the moment the first uncovered due date is ANY days
+// in the past (daysUntilDue < 0). No grace window on the visible status: if you're late,
+// you show red immediately. (The GRACE_DAYS tolerance still applies to the repeat-offender
+// badge in getLateCount().)
 // If the due date can't be determined (missing/corrupt payment_date), keep the red pill
 // rather than silently downgrading an unknown to "Còn hạn".
 function shouldShowOverduePill(customer) {
   const next = getNextDueDateObj(customer);
   if (!next || isNaN(next.getTime())) return true;
-  return getDaysUntilDue(customer) < -GRACE_DAYS;
+  return getDaysUntilDue(customer) < 0;
 }
 
-// Render-status for the pill: inactive customers always read "Tạm nghỉ", and
-// overdue/expired is downgraded to a neutral 'active' pill while the customer is still
-// inside the grace window, so the red Quá hạn/Hết hạn doesn't show.
+// Render-status for the pill: inactive customers always read "Tạm nghỉ". A customer whose
+// due date is in the past shows red Quá hạn/Hết hạn immediately (no grace window).
 // getDueStatus() itself is left unchanged (filtering/stats still use it).
 function getPillStatus(customer) {
   if (customer.active === false) return 'inactive';
