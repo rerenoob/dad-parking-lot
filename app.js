@@ -517,12 +517,12 @@ function getDueStatus(customer) {
 }
 
 function getStatusText(status) {
-  const map = { 'active': 'Còn hạn', 'no-data': 'Chưa xác định', 'due-soon': 'Sắp hết hạn', 'overdue': 'Quá hạn', 'expired': 'Hết hạn' };
+  const map = { 'active': 'Còn hạn', 'no-data': 'Chưa xác định', 'due-soon': 'Sắp hết hạn', 'overdue': 'Quá hạn', 'expired': 'Hết hạn', 'inactive': 'Tạm nghỉ' };
   return map[status] || status;
 }
 
 function getStatusBadgeClass(status) {
-  const map = { 'active': 'status-active', 'no-data': 'status-expired', 'due-soon': 'status-due-soon', 'overdue': 'status-overdue', 'expired': 'status-expired' };
+  const map = { 'active': 'status-active', 'no-data': 'status-expired', 'due-soon': 'status-due-soon', 'overdue': 'status-overdue', 'expired': 'status-expired', 'inactive': 'status-inactive' };
   return map[status] || '';
 }
 
@@ -595,24 +595,24 @@ function getDaysUntilDue(customer) {
   return Math.round((a - b) / (1000 * 60 * 60 * 24));
 }
 
-// A customer is "paid up enough" to suppress the red Quá hạn/Hết hạn pill when their
-// most recent payment chain covers the current period (within the grace window or
-// beyond). Only show the red pill if the next uncovered due date is more than
-// GRACE_DAYS in the past — i.e. truly CURRENTLY delinquent.
+// Show the red Quá hạn/Hết hạn pill only once the first uncovered due date is MORE than
+// GRACE_DAYS in the past — i.e. the customer is currently delinquent. Inside the grace
+// window (due today .. GRACE_DAYS days late) the period still counts as settled on time,
+// the same rule getLateCount() uses (late === days > GRACE_DAYS).
+// If the due date can't be determined (missing/corrupt payment_date), keep the red pill
+// rather than silently downgrading an unknown to "Còn hạn".
 function shouldShowOverduePill(customer) {
   const next = getNextDueDateObj(customer);
-  if (!next) return false;
-  const now = new Date();
-  const a = new Date(next.getFullYear(), next.getMonth(), next.getDate());
-  const b = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const daysUntil = Math.round((a - b) / 86400000);
-  return daysUntil <= -GRACE_DAYS;
+  if (!next || isNaN(next.getTime())) return true;
+  return getDaysUntilDue(customer) < -GRACE_DAYS;
 }
 
-// Render-status for the pill: downgrade overdue/expired to a neutral 'active' pill
-// when the customer is paid up enough, so the red Quá hạn/Hết hạn doesn't show.
+// Render-status for the pill: inactive customers always read "Tạm nghỉ", and
+// overdue/expired is downgraded to a neutral 'active' pill while the customer is still
+// inside the grace window, so the red Quá hạn/Hết hạn doesn't show.
 // getDueStatus() itself is left unchanged (filtering/stats still use it).
 function getPillStatus(customer) {
+  if (customer.active === false) return 'inactive';
   const status = getDueStatus(customer);
   if ((status === 'overdue' || status === 'expired') && !shouldShowOverduePill(customer)) {
     return 'active';
@@ -666,7 +666,7 @@ function renderCustomers() {
         <div class="plate">${escapeHtml(c.plate)}${c.vehicle ? ' · ' + escapeHtml(c.vehicle) : ''}</div>
         <div class="meta">
           ${c.contactZalo ? '<span style="color:#0068FF;">💬 Zalo</span>' : c.phone ? `<a href="tel:${escapeHtml(c.phone)}" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;">📞 ${escapeHtml(c.phone)}</a>` : ''}
-          ${c.active !== false ? `<span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span>` : '<span class="status-badge status-inactive">Tạm nghỉ</span>'}
+          <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span>
           ${getLateCount(c) >= 2 ? `<span class="status-badge status-overdue">⚠️ Chậm ${getLateCount(c)}/${LATE_WINDOW} kỳ</span>` : ''}
         </div>
         <div class="meta">
