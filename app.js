@@ -666,7 +666,7 @@ function renderCustomers() {
         <div class="meta">
           ${c.contactZalo ? '<span style="color:#0068FF;">💬 Zalo</span>' : c.phone ? `<a href="tel:${escapeHtml(c.phone)}" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;">📞 ${escapeHtml(c.phone)}</a>` : ''}
           <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span>
-          ${getLateCount(c) >= 2 ? `<span class="status-badge status-overdue">⚠️ Chậm ${getLateCount(c)}/${LATE_WINDOW} kỳ</span>` : ''}
+          ${/* LATE BADGE DISABLED 16/08 — Duong */ ''}
         </div>
         <div class="meta">
           <span>📅 Hạn: ${getNextDueDate(c)} (${dueLabel})</span>
@@ -898,7 +898,7 @@ async function openCustomerDetail(id) {
   const dueLabel = !c.lastPaymentDate ? 'chưa xác định' : daysNum > 0 ? `còn ${daysNum} ngày` : daysNum === 0 ? 'hết hạn hôm nay' : `quá hạn ${Math.abs(daysNum)} ngày`;
 
   const content = `
-    <h2>${escapeHtml(c.name)} <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span>${getLateCount(c) >= 2 ? `<span class="status-badge status-overdue">⚠️ Chậm ${getLateCount(c)}/${LATE_WINDOW} kỳ</span>` : ''}</h2>
+    <h2>${escapeHtml(c.name)} <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span>${/* LATE BADGE DISABLED 16/08 — Duong */ ''}</h2>
     <div style="margin-bottom:12px;">
       <div class="field" style="display:flex;justify-content:space-between;margin-bottom:4px;">
         <span style="font-size:14px;"><strong>🪪 Biển số:</strong> ${escapeHtml(c.plate)}</span>
