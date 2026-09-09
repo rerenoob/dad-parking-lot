@@ -896,6 +896,8 @@ async function openCustomerDetail(id) {
 
   const daysNum = getDaysUntilDue(c);
   const dueLabel = !c.lastPaymentDate ? 'chưa xác định' : daysNum > 0 ? `còn ${daysNum} ngày` : daysNum === 0 ? 'hết hạn hôm nay' : `quá hạn ${Math.abs(daysNum)} ngày`;
+  const effectiveBillingDay = getBillingDay(c);
+  const billingDaySource = c.billingDay ? 'đặt riêng' : 'tự động theo lần thanh toán đầu tiên';
 
   const content = `
     <h2>${escapeHtml(c.name)} <span class="status-badge ${getStatusBadgeClass(status)}">${getStatusText(status)}</span>${/* LATE BADGE DISABLED 16/08 — Duong */ ''}</h2>
@@ -906,6 +908,7 @@ async function openCustomerDetail(id) {
       </div>
       <div style="font-size:14px;margin-bottom:4px;">${c.vehicle ? '🚗 ' + escapeHtml(c.vehicle) : ''}${c.spot ? ' · 🅿️ ' + escapeHtml(c.spot) : ''}</div>
       <div style="font-size:14px;margin-bottom:4px;"><strong>💰 Giá tháng:</strong> ${formatCurrency(c.monthlyFee)}</div>
+      <div style="font-size:14px;margin-bottom:4px;"><strong>📅 Ngày đến hạn hàng tháng:</strong> ngày ${effectiveBillingDay} (${billingDaySource})</div>
       <div style="font-size:14px;margin-bottom:4px;"><strong>📅 Đóng gần nhất:</strong> ${formatDate(c.lastPaymentDate)}</div>
       <div style="font-size:14px;margin-bottom:4px;"><strong>⏰ Hạn tới:</strong> ${getNextDueDate(c)} (${dueLabel})</div>
       ${c.notes ? '<div style="font-size:13px;color:#666;margin-top:4px;padding:8px;background:#f9f9f9;border-radius:6px;">📝 ' + escapeHtml(c.notes) + '</div>' : ''}
@@ -1134,13 +1137,17 @@ function editCustomer(id) {
     <div class="field"><label>Loại xe</label><input type="text" id="eVehicle" value="${escapeHtml(c.vehicle)}"></div>
     <div class="field"><label>Chỗ đỗ</label><input type="text" id="eSpot" value="${escapeHtml(c.spot)}"></div>
     <div class="field"><label>Giá tháng (VNĐ)</label><input type="text" inputmode="numeric" id="eFee"></div>
+    <div class="field"><label>Ngày thu hàng tháng</label>
+      <input type="number" inputmode="numeric" id="eBillingDay" value="${c.billingDay || ''}" min="1" max="31" step="1" placeholder="Để trống để tự động theo lần thanh toán đầu tiên">
+      <div style="font-size:12px;color:#666;margin-top:4px;">Thay đổi này chỉ áp dụng cho các ngày đến hạn trong tương lai, không thay đổi lịch sử thanh toán.</div>
+    </div>
     <div class="field"><label>Ghi chú</label><textarea id="eNotes">${escapeHtml(c.notes)}</textarea></div>
     <div class="field"><label>Ngày thanh toán gần nhất</label>
       <input type="date" id="ePayDate" value="${ePayDateVal}" style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:8px;font-size:16px;outline:none;">
     </div>
     <div class="btn-row">
       <button class="btn-secondary" onclick="openCustomerDetail('${c.id}')">Hủy</button>
-      <button class="btn-primary" onclick="submitEdit('${c.id}')">Lưu</button>
+      <button class="btn-primary" onclick="submitEditCustomer('${c.id}')">Lưu</button>
     </div>
   `;
   showModal(content);
@@ -1149,9 +1156,15 @@ function editCustomer(id) {
   togglePhoneField('e');
 }
 
-async function submitEdit(id) {
+async function submitEditCustomer(id) {
   const name = document.getElementById('eName').value.trim();
   if (!name) { showToast('⚠️ Nhập tên khách'); return; }
+  const billingDayValue = document.getElementById('eBillingDay').value.trim();
+  const billingDay = billingDayValue === '' ? null : Number(billingDayValue);
+  if (billingDayValue !== '' && (!Number.isInteger(billingDay) || billingDay < 1 || billingDay > 31)) {
+    showToast('⚠️ Ngày thu hàng tháng phải từ 1 đến 31');
+    return;
+  }
   const ePayDateVal = document.getElementById('ePayDate').value;
   const lastPaymentDate = ePayDateVal ? localDateToISO(ePayDateVal) : null;
   await updateCustomer(id, {
@@ -1163,6 +1176,7 @@ async function submitEdit(id) {
     monthlyFee: getCurrencyValue('eFee') || 0,
     notes: document.getElementById('eNotes').value.trim(),
     lastPaymentDate,
+    billingDay,
     contactZalo: document.getElementById('eZalo').checked
   });
   openCustomerDetail(id);
